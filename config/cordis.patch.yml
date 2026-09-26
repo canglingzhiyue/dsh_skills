@@ -1,0 +1,51 @@
+# Your patch layer for this dsh profile, applied after every bundle layer:
+# a top-level YAML array of loader patch entries (id-targeted config
+# overrides, disables, and insert lists; `!!js` expressions allowed).
+
+# ---------------------------------------------------------------------------
+# Camoufox 逆向 MCP —— camoufox-reverse-mcp
+# 独立环境位于 D:\AI_python\camoufox（自带 venv + 官方/定制版浏览器引擎）。
+# 使用说明：D:\AI_python\camoufox\使用说明.md
+# 工具在会话里以 mcp__camoufox__<tool> 暴露，例如 mcp__camoufox__launch_browser
+# ---------------------------------------------------------------------------
+- insert:
+    - id: mcp-camoufox-reverse
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: camoufox
+        transport: stdio
+        command: 'D:\AI_python\camoufox\.venv\Scripts\python.exe'
+        args:
+          - '-m'
+          - 'camoufox_reverse_mcp'
+          - '--locale'
+          - 'zh-CN'
+        env:
+          PYTHONUTF8: '1'
+          PYTHONIOENCODING: 'utf-8'
+        toolCallTimeoutMs: 120000
+
+# ---------------------------------------------------------------------------
+# JADX 逆向 MCP —— jadx-mcp-server (zinja-coder/jadx-ai-mcp)
+# 通过 uv 启动 D:\AI_python\MCP\MCP合集\jadx-mcp-server\jadx_mcp_server.py
+# 依赖 fastmcp / httpx / requests，由 uv 依 pyproject.toml + uv.lock 自动装到缓存环境。
+# 需要 JADX-GUI 里装好 jadx-ai-mcp 插件并保持开启（默认 127.0.0.1:8650）。
+# 工具在会话里以 mcp__jadx__<tool> 暴露，例如 mcp__jadx__get_all_classes
+# ---------------------------------------------------------------------------
+- insert:
+    - id: mcp-jadx
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: jadx
+        transport: stdio
+        command: 'uv'
+        args:
+          - '--directory'
+          - 'D:\AI_python\MCP\MCP合集\jadx-mcp-server'
+          - 'run'
+          - 'jadx_mcp_server.py'
+        env:
+          PYTHONUTF8: '1'
+          PYTHONIOENCODING: 'utf-8'
+        toolCallTimeoutMs: 120000
+        failOnStartupError: false

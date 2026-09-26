@@ -1,0 +1,69 @@
+# Global DSH rules (user-global instructions, loaded in every session)
+
+## Skill inventory — for skills and DSH plugins that are not DSH-bundled (skills, and DSH plugins)
+
+账本目录：`D:\AI_python\skills_backup`（换机器时连同 `skills-inventory` skill 顶部那一行一起改）
+
+- `SKILLS.md` — the ledger: append one table row (with its P0/P1/P2 priority) and one log line.
+  Never rewrite, reorder, or delete; a table-schema change must be explained in a log line.
+- `INSTALL.md` — the install guide, ordered by priority: append one section per entry; fix its wording
+  in place when a step is wrong.
+- `local\skill\<name>\` — full copy of a recorded skill that has no fetchable source.
+- `local\plugin\<name>\` — a recorded plugin's recipe (`RECIPE.md`: spec + install command +
+  prerequisites + profile snippets + verification); a self-written plugin also gets its source copied here.
+- `snapshots\ledger-YYYY-MM-DD.zip` — dated pre-change archive, taken *before* each edit.
+
+Rules:
+
+- **Scope: anything in this environment that is not DSH-bundled is recorded and backed up** — third-party
+  installs, things the user installed by hand, and things you installed for them. Two kinds qualify: a
+  **skill** (a directory under `$DSH_HOME/skills`) and a **DSH plugin** (a non-`@deepseek-ai/*` entry in a
+  profile's `dependencies` or `dsh.profile.bundles`). Never recorded or backed up: DSH's own bundles,
+  environment-provided tooling (npm/pnpm/node/corepack/…), and ordinary npm packages that are not DSH
+  skills or plugins. When unsure whether something counts as bundled, ask the user.
+- One entry per requested install, **not** per directory: a repository shipping six skills is one entry,
+  and the new environment reads the repository and handles the rest.
+- Record the source (repository URL / ClawHub name) plus the adaptation note when the source is not
+  DSH-native. If the source cannot be determined, write `未知（本地）` — never guess.
+- **Assign a priority whenever you record a skill**: `P0 治理类` (affects how other skills are installed
+  or recorded — install first, remove last), `P1 依赖类` (other skills reference it — install before its
+  dependents), `P2 独立类` (order-free). A new skill that changes the overall order must also be reflected
+  in the ledger, `INSTALL.md`, this file, and the `skills-inventory` skill when its rules change.
+- **A recorded skill with no fetchable source must be copied out in full**: copy the whole skill directory
+  (`SKILL.md` plus `references/`, `scripts/`, `assets/`, skipping `node_modules`/`.git`) to
+  `local\skill\<name>\`, write the source as `本地自制（完整备份见 local/skill/<name>/）` with adaptation
+  `DSH 原生，直接复制`, and on a later change re-copy the directory and append a log line.
+- **A recorded plugin is backed up as a recipe, never as build output**: give it
+  `local\plugin\<name>\RECIPE.md` holding the install spec (with the resolved commit), the
+  `dsh plugin --profile <p> add` command, its prerequisites (pnpm, the exact `allowBuilds` key), the
+  profile config it must end up in (`dependencies` entry plus `dsh.profile.bundles` entry), the
+  verification command, and the fact that DSH must be restarted. `node_modules` is reproducible and is
+  never copied; a self-written plugin also gets its source copied into the same directory.
+- **A skill that fronts a whole local environment is backed up self-contained**: when a recorded skill
+  describes how to use an environment built on this machine (self-made helper scripts, client config, a
+  heavyweight runtime of hundreds of MB to GBs), move the self-made pieces *into* the skill directory
+  (`scripts/`, `references/`), write a rebuild recipe under `references/` for the sourced heavy parts
+  (URL + pinned version + checksum + commands + any config snippet to paste), and keep those heavy parts
+  out of `local\` — only the self-contained directory is copied. Credentials, login state and profiles
+  are never backed up. Self-made in the directory, sourced as a recipe, sensitive never. Details in the
+  `skills-inventory` skill.
+- **Any change to a *recorded* entry — including `skills-inventory` itself — goes through the backup pass
+  again**: a local/self-written skill is re-copied in full; a plugin gets its `RECIPE.md` updated; a
+  network-sourced skill gets a log line describing the local change plus an update to its `INSTALL.md`
+  section when the change affects how a new environment rebuilds it. Anything not recorded stays
+  unrecorded: change it and move on — no ledger row, no `local/` copy, no guide section.
+- **Snapshot the ledger by date *before* every change**: zip `SKILLS.md`, `INSTALL.md` and `local\` —
+  skipping `snapshots\` itself — into `<账本目录>\snapshots\ledger-YYYY-MM-DD.zip`, overwriting the same
+  day's file. Taken *before* the edit, the archive always holds the last known-good version, so a bad
+  skill install, a broken plugin config or a mangled ledger rolls back by extracting that day's zip;
+  same-day repeats keep working because each one re-archives the pre-edit state. Details in the
+  `skills-inventory` skill.
+- **Re-installing from this ledger or the install guide is idempotent: append nothing.** Those installs
+  are not new requests; a second row would be a duplicate. Only a new request from the user is recorded.
+- If the 账本目录 above does not exist on this machine, ask the user where the ledger should live, then
+  update both this file and the top of the `skills-inventory` skill to the same path.
+- The files are outside the session workspace, so the writes are denied first: retry that exact operation
+  once with `sandbox_permissions: "danger-full-access"` and the justification "updating the skill
+  inventory outside the sandboxed workspace".
+
+Format and migration instructions: load the `skills-inventory` skill.

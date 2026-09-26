@@ -1,0 +1,37 @@
+ui-onboarding:
+  welcomeNoticeVersion: 2026-08-13.1
+ui-theme:
+  preference: system
+agent-default-model:
+  provider: ds-1zhe
+  model: deepseek-flash
+agent-presets:
+  default: standard
+llm-pi-ai:
+  providers:
+    claudex:
+      displayName: claudex
+      apiKeyEnv: CLAUDEX_API_KEY
+      api: openai-completions
+      baseURL: https://claudex.org/v1
+      models:
+        - id: deepseek-v4-flash
+          name: deepseek-v4-flash
+        - id: deepseek-v4-pro
+          name: deepseek-v4-pro
+        - id: deepseek-v4.1-flash
+          name: deepseek-v4.1-flash
+    ds-1zhe:
+      displayName: 官转1折
+      apiKeyEnv: DS_1ZHE_API_KEY
+      api: openai-completions
+      baseURL: https://tokenrhythm.studio/v1
+      models:
+        - id: deepseek-v4-flash-0731
+          name: deepseek-v4-flash-0731
+          contextWindow: 1000000
+        - id: deepseek-flash
+          name: deepseek-v41-flash
+          contextWindow: 1000000
+ui-conversation:
+  busyEnter: steer

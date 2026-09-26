@@ -1,0 +1,345 @@
+---
+name: skills-inventory
+description: >
+  Append-only ledger of the skills, DSH plugins and MCP mounts installed in this environment, plus the
+  install guide and a one-shot restore script for a new machine. Records source, P0/P1/P2 priority and
+  adaptation notes; mirrors all skill content into a private git repo. Use after
+  installing/updating/modifying/removing a recorded item, or when the user says "备份 skill 清单",
+  "记录装了哪些 skill", "迁移 skill 到新环境", "skill inventory", /skills-inventory. Never records
+  items the user did not ask for.
+---
+
+# Skills Inventory
+
+**账本目录：`D:\AI_python\skills_backup`** ← 本机路径。**它同时是一个私有 git 仓库**，
+remote = `https://github.com/canglingzhiyue/dsh_skills.git`。换机器时改这一行（见「账本目录怎么定」）。
+
+**范围：这套环境里凡是"不是 DSH 自带"的都算** —— 第三方来源装的、用户手动装的、你（AI）帮他装的，
+都要记、都要备份。**三类东西**分别处理：
+
+- **skill** —— `$DSH_HOME/skills` 下的一个目录；
+- **DSH 插件** —— 某个 profile 的 `dependencies` / `dsh.profile.bundles` 里**非 `@deepseek-ai/*`** 的条目；
+- **MCP server 挂载** —— profile 的 `cordis.patch.yml` 里 `@deepseek-ai/dsh-mcp-client` 的 `insert` 条目
+  （它既不是 skill 也不是 npm 插件，但同样是"这台机器的资产"，不记就迁移不走）。
+
+**不记、不备份**：DSH 自带的那批 bundle、环境预装的工具（npm / pnpm / node / corepack / uv …）、
+以及根本不是 DSH skill / 插件 / MCP 的普通 npm 包。**拿不准某样东西算不算"自带" → 问用户，不要擅自记或擅自排除。**
+
+## 仓库结构
+
+| 路径 | 内容 |
+|---|---|
+| `skills\<name>\` | **全部 skill 的完整内容** —— `$DSH_HOME/skills` 的**全量镜像**（逐文件 SHA256 一致） |
+| `SKILLS.md` | **账本**：装过什么、优先级、来源、适配。**只追加，绝不重写**（表格结构变更例外，须在日志说明） |
+| `INSTALL.md` | **安装说明**：新环境照着它**按优先级顺序**一节一节装。它是"当前说明"，有错就当场改对（不保旧版） |
+| `plugins\<name>\RECIPE.md` | 已记账插件的**配方**；插件若是自己写的，连源码一起放这里 |
+| `config\` | **环境配置**：`AGENTS.md`（常驻规则）、`settings.yaml`、`cordis.patch.yml`（MCP 挂载）、`profile\`（`package.json` / `pnpm-workspace.yaml` / `cordis.yml`） |
+| `install.ps1` | **一键恢复脚本**：skill + 常驻规则 + DSH 设置 + MCP 挂载 + profile 配置 + 插件安装 |
+| `README.md` / `CHANGELOG.md` | 仓库说明 / **变更说明**（每次改了什么、为什么、影响哪些文件） |
+| `archive\` | 历史归档（如 `AGENTS.md` 的旧版本） |
+
+## 九条规矩
+
+1. **范围：非 DSH 自带就纳入**（见开头那段，**三类**）。第三方装的、用户手动装的、你帮装的，都记；
+   DSH 自带 bundle、环境预装工具、普通 npm 包不记。分不清就问用户。
+2. **一次安装记一条，不是每个目录一条。** 仓库里打包了多个 skill（例如 ponytail 带 6 个）
+   也只记一条，拆包的事由新环境的 DSH 读仓库后自行处理。
+3. **账本只追加，不覆盖。** 新行加到表格末尾、新日志加到文件末尾；已有行不改不删，要更正就再追加一行说明。
+4. **照着账本/安装说明重装，什么都不写。** 那属于幂等重装，不是新要求；追加只会产生重复记录。
+5. **任何已记账的条目被修改，都要重新同步 + 提交一趟**（含本 skill `skills-inventory` 自己）。
+6. **skill 一律全量镜像到 `skills\<name>\`**，不管有没有来源（见「skill 怎么备份」一节）。
+   它背后若有**一整套本机环境**（自制脚本 + 客户端配置 + 几百 MB 到几 GB 的运行时），
+   按「配套环境型 skill」一节处理 —— **自制件收进 skill 目录，大件只记重建配方，敏感的永不备份**。
+7. **插件只存配方，且只记来源与安装命令**（见「插件怎么备份」一节）：`plugins\<name>\RECIPE.md`
+   写清**来源 spec（不锁版本）**、安装命令、前置条件、profile 配置片段、验证与重启要求；
+   `node_modules` 可重装，永不复制，**插件源码也从不备份**。
+8. **每次记账同时补/更新安装说明**（见下节）。
+9. **每次改完，提交并推送到仓库**（见「变更即提交」）：**git 历史就是回退手段**，
+   原先的按日 zip 快照已退休。
+
+## 优先级与安装顺序
+
+每个记账的条目都要标一个优先级，写进账本表格的「优先级」列；**新装时先判定优先级**：
+
+| 优先级 | 含义 | 当前 |
+|---|---|---|
+| **P0 治理类** | 它决定"其他 skill 怎么被安装/记账/生效"；**必须最先装，最后卸** | `skills-inventory` |
+| **P1 依赖类** | 别的 skill 或其脚本会引用它、调用它提供的命令/文件；**先装被依赖的，卸载反序** | `dev-hygiene` |
+| **P2 独立类** | 跟其他互不影响，**任意顺序** | 其余全部 |
+
+判定方法（不确定就往低依赖方向判，别乱升）：
+
+- 改了它会影响"别的 skill 能不能被正确安装/记账"？→ **P0**。
+- 别的 skill 的 `SKILL.md` 或脚本会引用、调用它提供的命令/文件？→ **P1**。
+- 都不 → **P2**。
+
+安装顺序：**P0 全部先装** → P1（按依赖先后）→ P2（任意）。卸载顺序相反：先 P2/P1，最后 P0。
+**插件与 MCP 的额外要求**：它们都在 profile 的 bundle 层，装完**必须重启 DSH** 才生效；
+所以同优先级下，把它们排在最后装，重启一次即可。
+
+新装的条目如果改变了总体顺序规则（例如新增了一个 P0），除了账本与安装说明，还要同步更新
+`$DSH_HOME/AGENTS.md` 常驻规则，必要时更新本 skill 正文。
+
+## 账本目录怎么定
+
+- 以本文件顶部那一行为准。
+- 那一行在当前机器上**不存在**（换了机器、换了盘）→ **问用户账本放哪**，拿到路径后改两处：
+  本文件顶部这一行 + `$DSH_HOME/AGENTS.md` 常驻规则里的路径，然后继续干活。
+- 不要默认假设 `D:\AI_python\skills_backup` 一定存在，也不要静默地在别处新建一份。
+- **换机器时**：不必新建账本目录，直接照「迁移到新环境」一节 `git clone` 本仓库即可。
+
+## skill 怎么备份：全量镜像
+
+**所有 skill（不论有没有来源）都整份镜像到 `skills\<name>\`**：
+
+```powershell
+robocopy "$env:USERPROFILE\.dsh\skills" "D:\AI_python\skills_backup\skills" `
+  /E /XD __pycache__ .git node_modules .venv /XF *.pyc /NFL /NDL /NJH /NJS /NP
+```
+
+- 跳过 `node_modules` / `.venv` / `__pycache__`（可重装），其余**全部**保留 ——
+  含上游代码、`references\`、`scripts\`、大文档（如 firerpa 的 `llms-full.txt` 496 KB）。
+- **为什么要全量**：新环境 `git clone` 后直接把 `skills\*` 复制到 `$DSH_HOME/skills` 即可，
+  **不必再去各自的上游仓库逐个拉取**；恢复流程从"拉上游 + 打适配层 + 建环境"缩短为"clone + 复制"。
+- 同步完**必须核对**：逐文件 SHA256 与 `$DSH_HOME/skills` 一致，文件数相同。
+- **没有来源的 skill**（自己写的 / 导入的 / 被改到与上游无关的）也在同一个 `skills\` 下 ——
+  它们的特殊之处只在**账本里要标注「唯一副本在这里」**（见「表格每列写什么」的「来源」列）。
+
+> 旧规则里的 `local\skill\<name>\` 已取消：`skills\` 全量镜像把它取代了（不再"只备份没来源的"）。
+
+## 插件怎么备份：配方 + profile 片段，不是文件副本
+
+插件与 skill 的**安装方式完全不同**：skill 是"把目录复制到 `$DSH_HOME/skills`"，
+而插件要装进**某个 profile 的依赖**并被它的 `bundles` 列表加载，装完还得**重启 DSH**。
+所以插件的备份 = **一份能照着重装的配方**，放在 `plugins\<name>\RECIPE.md`：
+
+1. **身份**：插件名、类型（DSH 插件）、优先级、用途、来源 URL、记录日期。
+2. **来源与安装命令**：`dsh plugin --profile <profile> add <spec>`。
+   **spec 写来源本身、不锁版本**（`github:owner/repo`、`@scope/pkg`、release 的
+   `…/releases/latest/download/<asset>` 等）—— 重装即升级到最新版。**不要记 commit / tag / 校验和 /
+   包内文件清单**：它们随升级立刻过期，而且属于源码级内容，插件从来只记配方、不备份源码。
+3. **前置条件**：`dsh plugin` 只是 pnpm 的转发器（机器上要有 pnpm）；git 依赖的 prepare 构建会被 pnpm
+   默认拦截，要把**确切的那个 `allowBuilds` 键**（形如
+   `"<name>@https://codeload.github.com/<owner>/<repo>/tar.gz/<commit>": true`，键里带 `@` `:` `/`，
+   **必须加引号**）写进 `<profile>\pnpm-workspace.yaml` 再重跑。这个键非常容易丢，**必须记进配方**。
+   （该文件的完整内容已备份在 `config\profile\pnpm-workspace.yaml`。）
+4. **装完应该长成什么样**：profile 的 `package.json` 里
+   `dependencies` 多出哪一条、`dsh.profile.bundles` 末尾多出哪一个。
+   `bundles` 由 dsh 自动 reconcile，但**少了它插件不会加载**，所以它是核对基准。
+   （该文件的完整内容已备份在 `config\profile\package.json`。）
+5. **验证**：`dsh --profile <profile> --dump-config` 输出里应出现该插件段落；以及
+   **必须重启 DSH**（bundle 层在 profile 启动时组合，运行中不会热加载）。
+6. **卸载**：`dsh plugin --profile <profile> remove <name>` + 重启。
+7. **不复制 `node_modules`**：构建产物可重装，只保留配方。
+   **例外**：插件是**自己写的**（没有任何来源）→ 连源码一起放进 `plugins\<name>\`，
+   并在配方里写清它该放哪、怎么被 profile 引用。
+
+> 判断"有来源 / 无来源"和 skill 一样：能用一条 `dsh plugin add` 重新拿到的，只记配方。
+
+## MCP 怎么备份：挂载条目 + 运行时重建配方
+
+MCP server 既不是 skill 也不是 npm 插件 —— 它是一条**普通的 DSH 配置**：写在
+`<profile>\cordis.patch.yml` 里的 `insert` 条目（`name: '@deepseek-ai/dsh-mcp-client'`）。
+它必须被记账，因为**不记就迁移不走**，新环境会少掉这些工具。
+
+账本里给每个 MCP 记一条，并在**「来源」列写它依赖的运行时**。配置文件本身整份备份在
+`config\cordis.patch.yml`（它是所有 MCP 挂载的单一来源，不需要每个 MCP 一个文件）。
+
+一个 MCP 条目的配方要写清：
+
+1. **身份与用途**：`serverName`（工具在会话里以 `mcp__<serverName>__<tool>` 暴露）、干什么用的。
+2. **配置来源**：它活在哪份配置里（本机是 `config\cordis.patch.yml`），原样条目保留。
+3. **依赖的运行时**：`command` / `args` 指向什么 —— 例如 camoufox MCP 指向
+   `D:\AI_python\camoufox\.venv\Scripts\python.exe`，jadx MCP 由 `uv` 在
+   `D:\AI_python\MCP\MCP合集\jadx-mcp-server` 下启动。
+   **运行时体积大、有来源 → 只记重建配方，不备份**（见「配套环境型 skill」）。
+4. **外部前置**：例如 jadx MCP 需要 **JADX-GUI 里装好 `jadx-ai-mcp` 插件并保持开启**
+   （默认 `127.0.0.1:8650`）—— 这类"不在本机、也不在仓库"的前置必须写明，否则新环境会一头雾水。
+5. **验证**：重启 DSH 后，会话里应出现 `mcp__<serverName>__*` 工具；`--dump-config` 里应出现该条目。
+   `failOnStartupError: false` 的条目（如 jadx）**启动失败不会报错**，所以要主动验证。
+6. **必须重启 DSH**：MCP 在 profile 启动时组合，不重启不生效。
+
+## 配套环境型 skill：自制件进目录，有来源的只记配方
+
+有些 skill 描述的**不是一段提示词，而是一整套本机环境的用法**：正文引用工作区里的自制脚本、
+某个客户端的配置，背后还有几百 MB 到几 GB 的第三方运行时（浏览器引擎、模型、服务二进制）。
+
+这类 skill **只备份 `SKILL.md` 是残缺的** —— 换台机器拿到的是一份"说明书"，里面提到的脚本、配置和
+重建步骤全都不在。反过来把几 GB 运行时塞进仓库也不合理：它们本来就能从网上重下，
+而且体积会毁掉仓库的克隆体验。办法是**让 skill 目录自包含，大件只留重建配方**。
+
+### 什么时候适用
+
+skill 正文出现下列任一情况，就按本节处理：
+
+- 引用了 skill 目录**之外**的自制文件（工作区脚本、配置文件、说明书）；
+- 依赖一个要另外安装的运行时 / 服务（浏览器、引擎、数据库、CLI）；
+- 含有"安装 / 重建 / 迁移"这类带固定步骤与版本号的内容。
+
+### 怎么做
+
+1. **把目录外的自制产物收进 skill 目录**：脚本 → `scripts\`，说明书 / 配置片段 / 示例 → `references\`。
+   自制的东西**必须进目录**：它们在别处没有任何来源。
+2. **在 `references\` 写一份「重建配方」**，让新环境不靠记忆也能装回来：
+   - 每个大件的**来源**（release 页 / PyPI / 包名）、**固定版本**、**校验和**（sha256 之类）；
+   - 按顺序的可执行命令，含"必须先做"的前置（例如先建目录联接再装引擎）；
+   - 要写进**其它**配置文件的片段原文（如 DSH 的 `cordis.patch.yml` 条目）；
+   - **明确列出永不备份的敏感数据**（凭据、登录态、profile）以及它们怎么重建。
+3. **能给就给一个 `scripts\restore` 一键重建脚本**：建环境 → 装依赖 → 下大件并校验 → 冒烟测试 →
+   打印还需手工贴的配置片段。没有它，"轻量备份"只是"记了一堆要手工执行的步骤"。
+4. **`skills\<name>\` 里备份整个自包含目录**（一般几十 KB 到几百 KB）；大件**不进仓库**，
+   只在账本「适配」列与重建配方里写清来源和版本。
+5. 账本两列照写，但「适配」列要补一句环境依赖：
+   - 来源：有来源就写来源 URL；没来源写 `本地自制（唯一副本在 skills/<name>/）`
+   - 适配：`该 skill 目录自包含，背后的 <大件>（约 <体积>）按 references\<配方> 重建，不随仓库迁移`
+6. **在 `INSTALL.md` 小节里写明维护提醒**：目录外的自制产物一旦改动，要重新同步进 skill 目录、
+   重新同步到 `skills\` 并提交 —— 否则备份会静默过期。
+
+### 一句话判据
+
+**自制的进目录，有来源的记配方，敏感的永不备份。**
+（体型线索：自制件通常 < 1 MB，有来源的大件往往 100 MB ~ 数 GB；这个体积差就是本节存在的理由。）
+
+## 修改已记账的条目
+
+只针对**账本里已有记录**的条目。它们只要内容被改动（你改的、用户改的、工具改的），都要走一遍重备份：
+
+- **skill**（含 `skills-inventory` 自己）→ 重新同步到 `skills\<name>\`（见「skill 怎么备份」），
+  再在日志追加一行说明改了什么。**历史由 git 提交历史承担**。
+- **网络来源的 skill** → 同样全量镜像；另外在日志说明本地改了什么；
+  如果这个改动会影响新环境重建（例如适配步骤变了），**同时更新 `INSTALL.md` 里该条目的小节**。
+- **插件** → 更新 `plugins\<name>\RECIPE.md`（来源 / 安装命令 / `allowBuilds` 键 / profile 片段变了
+  就要改），再追加日志；插件是自写的还要重新复制源码。
+- **MCP** → 更新 `config\cordis.patch.yml` 的副本 + 账本里该行的说明，再追加日志。
+- **`config\` 里的任何文件被改**（`AGENTS.md` / `settings.yaml` / profile 配置）→
+  重新复制到 `config\`，再追加日志。
+- **不在账本里的东西被改 → 什么都不做**：不补记、不进 `skills\`、不加安装说明小节。
+- 改完再核对一次：镜像文件数与源目录一致（SHA256 一致）；`INSTALL.md` 的小节仍然能照着装出同样的结果。
+- **动手之前**不必再打 zip；正常改、改完提交即可（真要留退路就先 `git commit` 一个基线）。
+
+## 变更即提交：git 取代了按日 zip 快照
+
+**回退手段就是 git 历史**，不再有 `snapshots\ledger-YYYY-MM-DD.zip`（旧文件已退休，见 `.gitignore`）。
+原先"动手前先打快照"的理由（活账本每个条目只保留最新一份，改坏了没得退）现在由
+**上一次 commit** 承担，而且更强：能 diff、能定位是哪次改动引入的问题、能只回退单个文件。
+
+**每次改完账本（新增 / 修改 / 删除任何已记账条目）之后：**
+
+```powershell
+$L = 'D:\AI_python\skills_backup'
+cd $L
+
+# ① 同步 skill 内容（skills\ ← $DSH_HOME\skills）
+robocopy "$env:USERPROFILE\.dsh\skills" "$L\skills" `
+  /E /XD __pycache__ .git node_modules .venv /XF *.pyc /NFL /NDL /NJH /NJS /NP
+
+# ② 同步环境配置（config\ ← $DSH_HOME）
+Copy-Item "$env:USERPROFILE\.dsh\AGENTS.md"                       "$L\config\AGENTS.md" -Force
+Copy-Item "$env:USERPROFILE\.dsh\settings.yaml"                   "$L\config\settings.yaml" -Force
+Copy-Item "$env:USERPROFILE\.dsh\profiles\web\cordis.patch.yml"   "$L\config\cordis.patch.yml" -Force
+Copy-Item "$env:USERPROFILE\.dsh\profiles\web\package.json"       "$L\config\profile\package.json" -Force
+Copy-Item "$env:USERPROFILE\.dsh\profiles\web\pnpm-workspace.yaml" "$L\config\profile\pnpm-workspace.yaml" -Force
+Copy-Item "$env:USERPROFILE\.dsh\profiles\web\cordis.yml"         "$L\config\profile\cordis.yml" -Force
+
+# ③ 更新 SKILLS.md（追加日志）+ CHANGELOG.md（追加变更说明）
+
+# ④ 提交推送
+git add -A
+git commit -m "<类型>: <一句话说明>"
+git push
+```
+
+**提交信息约定**：`install:` / `update:` / `remove:` / `rule:` / `config:` + 一句话。
+
+### 怎么回退
+
+| 想要什么 | 怎么做 |
+|---|---|
+| **改坏了，退回上一版** | `git log --oneline` 找到目标提交 → `git revert <commit>`（保留历史）或 `git checkout <commit> -- <路径>`（只回退某文件） |
+| 只想看看某次改了什么 | `git show <commit>` / `git diff <commit>~1 <commit>` |
+| 整个仓库回到某天 | `git checkout <commit>`（游离头）或 `git reset --hard <commit>`（**会丢未提交改动，慎用**） |
+| 回退后 | 按「修改已记账的条目」走一遍，并在 `SKILLS.md` **追加日志说明这是一次回退** |
+
+**和「只追加」的关系**：正常情况下账本不需要"撤销"，行和日志写了就留着。git 是给
+**装坏、写坏、误删**这三件事兜底的，不是日常撤销手段。
+
+## 每次记账都要补一节安装说明
+
+在 `INSTALL.md` 里写清新的环境要照着做什么；新条目就在末尾**追加一节**
+（`## <name>（P? 类型 · skill/插件/MCP · 网络来源/本地来源）`）：
+
+- **网络来源的 skill**：仓库 URL、**只取哪一部分**（上游往往还带 README、hooks、benchmark，不要照搬整个仓库）、
+  需要哪些 DSH 化改造（frontmatter 只留 `name`/`description`、命令改用 `/name` 调用、
+  子代理规则要写进 subagent 的 prompt），以及装完怎么验证。
+- **本地来源的 skill**：`skills\<name>\` 直接整份复制到 skill 根、不需要改造；它是**唯一副本**，
+  仓库里那份不在时先找用户要，**不要去网上找同名 skill 顶替**。
+- **插件**：照 `plugins\<name>\RECIPE.md` 的内容写（安装命令、`allowBuilds` 键、profile 片段、
+  验证、**必须重启 DSH**），并指回那份配方。
+- **MCP**：写清 `serverName`、它在 `config\cordis.patch.yml` 里的条目、**依赖的运行时怎么重建**、
+  **外部前置**（如需要某个 GUI 工具在跑）、以及"启动失败不会报错"的验证方法。
+
+安装说明是给"完全没有上下文的新 DSH"看的：写成能照着执行的动作，不要写"参考某处"这类空话。
+**最省事的做法**是让新环境直接跑 `install.ps1`，安装说明只需写它覆盖不到的部分。
+
+## 什么时候动它
+
+用户要求安装、更新、修改或删除之后：
+
+1. `read` 打开 `<账本目录>\SKILLS.md` 和 `INSTALL.md`。
+2. **顺手清点一次**（避免漏掉用户自己装的）—— 现在要扫**三类**：
+   - skill = `$DSH_HOME/skills` 下的目录；
+   - 插件 = `<profile>\package.json` 的 `dependencies` 里**非 `@deepseek-ai/*`** 的条目，
+     以及 `dsh.profile.bundles` 里非自带的那些；
+   - **MCP = `<profile>\cordis.patch.yml` 里 `name: '@deepseek-ai/dsh-mcp-client'` 的 `insert` 条目**。
+   发现没记账的（用户手动装的、第三方装的）→ 一并补记；分不清是否自带的 → 问用户。
+3. 判定优先级（P0/P1/P2），确认它是否改变安装顺序。
+4. 记账：账本追加一行表格（含优先级）+ 一行日志，`INSTALL.md` 追加一节（或更新 `install.ps1`）；
+   插件无论有无来源都要写 `RECIPE.md`。
+5. **同步 + 提交推送**（见「变更即提交」），并在 `CHANGELOG.md` 追加一条变更说明。
+6. 文件在工作区之外时可能被沙箱拒绝：**同一次操作重试一次**并申请 `danger-full-access`，
+   理由写"更新工作区外的 skill 清单"。
+
+## 表格每列写什么
+
+| 列 | 内容 |
+|---|---|
+| 名称 | 用户口中或来源里的名字（仓库名即可）；**是插件就标注「DSH 插件」**，是 MCP 就标注「MCP」，是 skill 可不标 |
+| 优先级 | `P0 治理类` / `P1 依赖类` / `P2 独立类`（判定见上） |
+| 来源 | GitHub 仓库 URL、ClawHub 名称；**没来源写 `本地自制（唯一副本在 skills/<name>/）`**；推不出来写 `未知（本地）`，**绝不编造**。**MCP 这一列写它依赖的运行时**（如 `camoufox MCP ← D:\AI_python\camoufox`） |
+| 适配 | 来源不是 DSH 原生格式时必写：`需按 DSH 模式定制修改 —— SKILL.md frontmatter 只留 name/description（≤500 字符）、命令说明改用 /name 调用、子代理规则写进 subagent prompt`；本身就是 DSH skill 则写 `DSH 原生，复制 skills/<name>/ 即可`；**插件写安装命令与前置，并指向 `plugins\<name>\RECIPE.md`**；**MCP 写它的 `serverName` 与在 `config\cordis.patch.yml` 里的条目、外部前置、验证方式** |
+| 记录日期 | `YYYY-MM-DD` |
+
+日志一行说清这次做了什么：装/改了哪个来源、带了几个 skill / 插件 / MCP、同步了哪些目录、优先级变化、删掉了什么。
+
+## 迁移到新环境
+
+新环境只需要**仓库地址**：
+
+```powershell
+git clone https://github.com/canglingzhiyue/dsh_skills.git
+cd dsh_skills
+pwsh -File install.ps1 -DryRun     # 先看它会做什么
+pwsh -File install.ps1             # 执行
+```
+
+`install.ps1` 会做完**自动部分**：备份现有配置 → 恢复全部 skill → 恢复常驻规则与 DSH 设置 →
+恢复 MCP 挂载与 profile 配置 → 装第三方插件 → 打印**必须人工完成**的待办
+（重建 GB 级运行时、填凭据、登录、改硬编码路径、**重启 DSH**）。
+
+**它做不到的事**（脚本末尾会列出来，必须人工）：
+
+- 各 skill 背后的**运行时**（约 2.7 GB）—— 按各 skill 的 `references\重建配方` 或 `scripts\restore.ps1` 联网重建；
+- **凭据**（`.credentials.yaml` 里的 API key）—— 永不进仓库，必须手填；
+- **登录态** —— 永不进仓库（如 camoufox 的 `states\` / `profiles\`）；
+- **外部前置** —— 如 jadx MCP 需要 JADX-GUI 里装好插件并保持开启。
+
+**不要**往 `SKILLS.md` / `CHANGELOG.md` 追加任何内容：那是重装，不是新变更。
+新环境里系统自带、环境预装的 skill / 插件 / MCP 不在清单里，也**不要装、不要记**。
+
+## 边界
+
+有来源的只记来源，没来源的照样全量镜像（只是账本里标注"唯一副本在这里"）。
+插件永远只存配方不存 `node_modules`；MCP 永远只存挂载条目不存运行时。
+**DSH 自带的东西永远不记、不备份**（包括只是被改过的那些）；
+**凭据与登录态永远不进仓库**（`.credentials.yaml`、`states\`、`profiles\`）。
+重装永远不重复记账；改动永远不丢 —— **最坏也能从上一个 commit 取回**。

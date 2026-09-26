@@ -1,0 +1,23 @@
+{
+  "name": "dsh-profile-web",
+  "private": true,
+  "dsh": {
+    "profile": {
+      "bundles": [
+        "@deepseek-ai/dsh-base",
+        "@deepseek-ai/dsh-web-app",
+        "dsh-think-zh",
+        "@liustack/modsearch",
+        "@howmp/dsh-pentest",
+        "dsh-ding"
+      ],
+      "patchReload": "live"
+    }
+  },
+  "dependencies": {
+    "@howmp/dsh-pentest": "https://github.com/howmp/dsh-pentest/releases/latest/download/dsh-pentest.tar.gz",
+    "@liustack/modsearch": "5.10.3",
+    "dsh-ding": "github:CAOGGL/dsh-ding",
+    "dsh-think-zh": "github:Len7183/DSH-Think-zh"
+  }
+}

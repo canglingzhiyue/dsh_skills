@@ -1,0 +1,12 @@
+packages:
+  - .
+
+nodeLinker: hoisted
+autoInstallPeers: false
+
+# git 安装的插件要在 prepare 里跑 tsc 构建，pnpm 默认拦截构建脚本；
+# 下面是 pnpm 报错里给出的确切键（含解析到的 commit）。
+allowBuilds:
+  "dsh-think-zh@https://codeload.github.com/Len7183/DSH-Think-zh/tar.gz/06a27f64218e7c9367d502fe0f7b90cb8e17ed7a": true
+minimumReleaseAgeExclude:
+  - '@liustack/modsearch@5.10.3'

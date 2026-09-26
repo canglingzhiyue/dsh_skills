@@ -1,0 +1,15 @@
+# 本地 zip 历史快照 —— 已由 git 历史取代，不再新增
+# （历史文件留在本地作过渡，可随时删除；不进仓库）
+snapshots/
+
+# 常见噪声
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+node_modules/
+Thumbs.db
+desktop.ini
+*~
+*.tmp
+*.swp
