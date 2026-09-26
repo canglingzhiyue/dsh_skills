@@ -14,6 +14,70 @@
 
 ---
 
+## 2026-09-26 — 新增第三个 MCP 挂载：Hex-Rays 官方 IDA MCP（`ida-mcp`）
+
+### 变更类型
+
+新增 **MCP 挂载**（既不是 skill 也不是插件）+ 一处环境改动（IDA 的 Python 环境）。
+
+### 内容
+
+用户要求安装 <https://github.com/HexRaysSA/ida-mcp>（官方 Hex-Rays IDA MCP Server），
+并给出 IDA 安装路径 `D:\ProgramsDev\IDA Professional 9.4`。
+
+- **挂载**：`config\cordis.patch.yml` 新增 `id: mcp-ida` / `serverName: ida` 条目，
+  命令 `uvx --exclude-newer=1s ida-mcp stdio --agent=dsh`，`toolCallTimeoutMs: 600000`。
+  本 profile 是 `patchReload: live` —— **实测无需重启 DSH**：改完进程列表随即出现该 uvx 进程，
+  会话工具列表里也随即出现 `mcp__ida__*`（6 个工具：open_database / execute_python / reference /
+  list_databases / save_database / close_database）。
+- **运行时**：`uvx` 直接跑 PyPI 上的 `ida-mcp`（缓存环境 7 个包，含 `idapro`），
+  **没有需要重建的独立目录**；它依赖本机 IDA 9.4 的 idalib，路径早已写在
+  `%APPDATA%\HexRays\IDA Pro\ida-config.json`（`hcli` 自检报 `idalib: active`），**不需要设 `IDADIR`**
+  （官方明确警告不要设全局 `IDADIR`，会干扰 IDA GUI）。
+- **外部前置（可选）**：IDA GUI 插件 —— `uvx ida-hcli plugin install 'ida-mcp@https://github.com/hexrayssa/ida-mcp'`
+  → `Installed plugin: ida-mcp==20260924.0.3`，落在 `%APPDATA%\HexRays\IDA Pro\plugins\ida-mcp\`，
+  **装完需重启 IDA** 才生效。
+- **环境改动**：原先 IDA 用的是 uv 托管的全局 CPython 3.13（PEP 668 外部管理、非 venv），
+  hcli 拒绝往里装 `ida-nexus`；按官方解法跑 `ida-hcli ida python create-environment` →
+  建 `%APPDATA%\HexRays\IDA Pro\venv`（3.13 + pip，已装 `ida-nexus 0.13.0` / `ida-domain 0.5.1` /
+  `idapro 0.0.10`）并设置**用户级**环境变量 `IDAPYTHON_VENV_EXECUTABLE` 指向它。
+
+### 原因
+
+用户正在做 IDA 逆向（工作区 `tb_10.41.0.1` 里有 `libsgmainso-6.6.241002.so` 的 ida_recon 流程），
+需要一条让 DSH 会话直接驱动 IDA 做反编译 / 交叉引用 / 类型恢复的通路。
+
+### 验证（两层，都实测）
+
+1. 独立 MCP 探针：`initialize` 604 ms → `open_database` 4.4 s 返回 `backend: idalib` →
+   `execute_python` 得 `0x140001000`–`0x140010000` / **172 个函数**；
+2. **经 DSH 自己的 MCP 客户端**重复一遍，结果一致（`dsh→mcp→idalib ok`）——
+   即"会话 → DSH → MCP → idalib → IDA"全链路通。
+
+样本是临时复制的 45 KB PE，验证后已 `close_database` 并清理 `%TEMP%`。
+
+### 踩到的三个坑（已写进 `INSTALL.md` 的「ida MCP」小节）
+
+1. **`ida-hcli` 插件名歧义**：社区插件仓库里有个同名第三方 `IDA-MCP@github.com/captain-ai-hub/ida-mcp`，
+   直接给 URL 会报 `ambiguous plugin reference: 'ida-mcp' matches 2 plugins`
+   → 必须写全限定 `ida-mcp@https://github.com/hexrayssa/ida-mcp`。
+2. **hcli 不读 git 的代理配置**：直连 GitHub 报 `[WinError 10054] 远程主机强迫关闭了一个现有的连接`
+   → 显式给 `HTTP_PROXY` / `HTTPS_PROXY`（本机 `http://127.0.0.1:7890`），pip 侧另加清华源。
+3. **IDA 的 Python 是 PEP 668 外部管理**（uv 托管 CPython 3.13，非 venv）→ 必须先
+   `ida-hcli ida python create-environment`，否则插件依赖装不进去。
+
+### 影响文件
+
+- `config\cordis.patch.yml`（第三个 MCP 条目；SHA256 与 profile 一致 `E9C1C0B1…`）
+- `SKILLS.md`（+1 行表格 + 1 行日志）
+- `INSTALL.md`（MCP 节：表格 2 → 3 行；新增「ida MCP」小节）
+- `install.ps1`（待办清单补 ida MCP 一条）
+- `CHANGELOG.md`（本条目）
+- 仓库之外：`~/.dsh/profiles/web/cordis.patch.yml`、`%APPDATA%\HexRays\IDA Pro\plugins\ida-mcp\`、
+  `%APPDATA%\HexRays\IDA Pro\venv\`、用户级环境变量 `IDAPYTHON_VENV_EXECUTABLE`
+
+---
+
 ## 2026-09-26 — 备份范围扩展到 skill + MCP + 插件 + 环境配置；新增一键恢复
 
 ### ① 环境配置纳入 `config/`（此前完全没备份）

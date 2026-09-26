@@ -164,6 +164,12 @@ Write-Host @'
        wmpf-miniapp-reverse: WMPFDebugger + node_modules（约 165 MB），跑 scripts\restore.ps1（需代理）
        reverse-skill-router: git clone 上游仓库到 $DSH_HOME\reverse-skill（约 12 MB），跑 scripts\restore.ps1
        jadx MCP           : D:\AI_python\MCP\MCP合集\jadx-mcp-server（uv 环境，约 41 MB）
+       ida MCP            : 需本机 IDA 9.4+ 且 idalib 已激活（跑一次 <IDADIR>\idalib\python\py-activate-idalib.py，
+                            路径写进 %APPDATA%\HexRays\IDA Pro\ida-config.json）；MCP 本体由 uvx 跑 PyPI 包，
+                            没有独立运行时目录。GUI 插件可选（**装完重启 IDA**）：
+                            uvx ida-hcli plugin install 'ida-mcp@https://github.com/hexrayssa/ida-mcp'
+                            报 PEP 668 / not a virtual environment 时先跑：uvx ida-hcli ida python create-environment
+                            （hcli 不读 git 代理，需自行给 HTTP_PROXY/HTTPS_PROXY）
   2) 凭据（永不进仓库，必须手填）
        $DSH_HOME\.credentials.yaml —— DEEPSEEK_API_KEY / CLAUDEX_API_KEY / DS_1ZHE_API_KEY
   3) 登录态（永不进仓库）

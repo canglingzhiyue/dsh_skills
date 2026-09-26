@@ -944,17 +944,19 @@ $Py = 'D:\AI_python\firerpa\.venv\Scripts\python.exe'
 
 ## MCP（P2 独立类 · 网络来源 + 本地运行时）
 
-本机在 `<profile>\cordis.patch.yml` 里挂了 **2 个 MCP server**。它们**不是 skill、也不是 npm 插件**，
+本机在 `<profile>\cordis.patch.yml` 里挂了 **3 个 MCP server**。它们**不是 skill、也不是 npm 插件**，
 而是一条 DSH 配置（`@deepseek-ai/dsh-mcp-client` 的 `insert` 条目）—— 但同样必须迁移，
 否则新环境会少掉这些工具。配置文件整份备份在 **`config\cordis.patch.yml`**。
 
 装法：把 `config\cordis.patch.yml` 放到 `<profile>\cordis.patch.yml`（与 profile 三件配置配套），
-再重建下面各自的运行时。**装完必须重启 DSH**（MCP 在 profile 启动时组合，不重启不生效）。
+再重建下面各自的运行时。**装完必须重启 DSH**（MCP 在 profile 启动时组合；本机实测 `patchReload: live`
+下**新增 MCP 挂载会即时热加载**，但重启一次更保险）。
 
 | MCP | `serverName` | 工具前缀 | 依赖的运行时 |
 |---|---|---|---|
 | camoufox | `camoufox` | `mcp__camoufox__*` | `D:\AI_python\camoufox\.venv`（约 2.3 GB，见下） |
 | jadx | `jadx` | `mcp__jadx__*` | `D:\AI_python\MCP\MCP合集\jadx-mcp-server`（约 41 MB，见下） |
+| ida | `ida` | `mcp__ida__*` | 本机 IDA 9.4 的 idalib（无独立目录，`uvx` 跑 PyPI 包，见下） |
 
 ### camoufox MCP
 
@@ -982,7 +984,65 @@ $Py = 'D:\AI_python\firerpa\.venv\Scripts\python.exe'
 - **运行时重建**：把 `jadx-mcp-server` 目录（`pyproject.toml` + `uv.lock` + `jadx_mcp_server.py`）重新取回原位，
   `uv` 会自动装依赖（fastmcp / httpx / requests）。
 
+### ida MCP
+
+- **上游**：https://github.com/HexRaysSA/ida-mcp （官方 Hex-Rays IDA MCP Server，MIT，PyPI 包名同为 `ida-mcp`）
+  文档：https://docs.hex-rays.com/core/mcp
+- **命令**：`uvx --exclude-newer=1s ida-mcp stdio --agent=dsh`
+  —— `uvx` 直接跑 PyPI 上的最新稳定版，**不需要手工建 venv、也没有要重建的目录**
+  （首次会自动往 uv 缓存里装 7 个包，含 `idapro` 2.1 MiB）。
+- **依赖的运行时 = 本机 IDA 的 idalib，不产生任何目录**：机器上要有 **IDA 9.4 或更高（含 idalib）**，
+  并把安装路径写进 IDA 的用户配置（激活一次即可）：
+
+  ```powershell
+  # IDA 侧一次性激活 idalib（本机早已做过，路径已写在 json 里）
+  python "<IDA 安装目录>\idalib\python\py-activate-idalib.py" -d "D:\ProgramsDev\IDA Professional 9.4"
+  ```
+
+  激活后 `%APPDATA%\HexRays\IDA Pro\ida-config.json` 里应有
+  `"Paths": { "ida-install-dir": "D:\\ProgramsDev\\IDA Professional 9.4" }`。
+  **不要设全局 `IDADIR`**（官方明确警告会干扰 IDA GUI）；只在单次会话里临时覆盖时才用。
+  自检：`uvx ida-hcli` 的输出里应出现 `idalib: active (<你的 IDA 路径>)`。
+  PATH 里需要 `uv` 与 `git`。
+- **外部前置（可选但建议装）**：**IDA GUI 插件** —— 装了 MCP 才能读/操作「已打开的 IDA 窗口」
+  （否则 `list_databases` 会一直提示装）；**没装也能用 headless**（MCP 自己用 idalib 打开二进制分析）。
+
+  ```powershell
+  # 必须写「全限定名」：社区插件仓库里有个同名第三方 IDA-MCP，只给 URL 会报 ambiguous
+  uvx ida-hcli plugin install 'ida-mcp@https://github.com/hexrayssa/ida-mcp'
+  # 落在 %APPDATA%\HexRays\IDA Pro\plugins\ida-mcp\ ；**装完必须重启 IDA** 才生效
+  ```
+
+  - ⚠️ **hcli 不读 git 的代理配置**：直连 GitHub 会报
+    `[WinError 10054] 远程主机强迫关闭了一个现有的连接`
+    → 显式给 `HTTP_PROXY` / `HTTPS_PROXY`（本机 `http://127.0.0.1:7890`），pip 侧另加清华源。
+  - ⚠️ 它还要往 **IDA 的 Python** 里装 `ida-nexus`；若报
+    `IDA's Python is not a virtual environment` 或 `externally managed (PEP 668)`，先建专用环境：
+
+    ```powershell
+    uvx ida-hcli ida python create-environment
+    # 建 %APPDATA%\HexRays\IDA Pro\venv（Python 3.13 + pip），并设用户级
+    # IDAPYTHON_VENV_EXECUTABLE 指向它的 python.exe；之后 hcli 才装得进依赖
+    ```
+
+    本机实测该 venv 里是 `ida-nexus 0.13.0` / `ida-domain 0.5.1` / `idapro 0.0.10`。
+- **验证（两层都做）**：
+  1. 会话里出现 `mcp__ida__*`（6 个工具：`open_database` / `execute_python` / `reference` /
+     `list_databases` / `save_database` / `close_database`）；
+  2. 端到端：对任意二进制调 `mcp__ida__open_database`（本机实测 45 KB 的 PE 用 **4.4 s** 返回
+     `backend: idalib`），再调 `mcp__ida__execute_python` 执行
+     `hex(db.minimum_ea), hex(db.maximum_ea), sum(1 for _ in db.functions)`
+     —— 能返回地址范围与函数数（本机实测 172）即通路正常；用完 `mcp__ida__close_database`。
+  GUI 插件自检：`uvx ida-hcli plugin status` 应显示 `ida-mcp  <版本>`。
+  ⚠️ **测 stdio 别用「一次性喂完 JSON 再关 stdin」的写法** —— server 收到 EOF 会开始关停，
+  `open_database` 会撞上竞态返回 `database manager is shutting down`；要保持连接逐条等响应。
+- **不迁移 / 不备份**：`uvx` 缓存环境（PyPI 一条命令可重装）、
+  `%APPDATA%\HexRays\IDA Pro\plugins\ida-mcp\`（hcli 可重装）、IDA 的 `venv`（可重建）、
+  IDA 本体与 license（用户自行安装）。挂载条目已在 `config\cordis.patch.yml` 里。
+
 ### 不迁移 / 不备份
 
-两个 MCP 依赖的运行时（合计约 **2.4 GB**）**只记配方、不备份**；MCP 的挂载条目已在
-`config\cordis.patch.yml` 里。JADX-GUI 及其插件属于**外部工具**，不在本仓库范围内 —— 需要用户自行安装。
+三个 MCP 依赖的运行时（camoufox 的 venv+引擎约 **2.3 GB**、jadx 约 **41 MB**）**只记配方、不备份**；
+`ida` 没有独立运行时目录（`uvx` 跑 PyPI 包，只依赖本机 IDA 的 idalib）。
+MCP 的挂载条目已在 `config\cordis.patch.yml` 里。JADX-GUI 及其插件、IDA 本体与其 license、
+IDA GUI 插件目录都属于**外部工具**，不在本仓库范围内 —— 需要用户自行安装。

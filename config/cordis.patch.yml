@@ -49,3 +49,32 @@
           PYTHONIOENCODING: 'utf-8'
         toolCallTimeoutMs: 120000
         failOnStartupError: false
+
+# ---------------------------------------------------------------------------
+# IDA Pro 逆向 MCP —— Hex-Rays 官方 ida-mcp（PyPI 包 `ida-mcp`，MIT）
+# 上游：https://github.com/HexRaysSA/ida-mcp  文档：https://docs.hex-rays.com/core/mcp
+# 由 uvx 直接跑 PyPI 上的 ida-mcp，无需手工建 venv；uvx 缓存已预热（首次启动约 1.7s）。
+# 依赖本机 IDA 9.4 的 idalib：IDA 安装路径记在
+#   %APPDATA%\Hex-Rays\IDA Pro\ida-config.json → "D:\ProgramsDev\IDA Professional 9.4"
+# （只需在 PATH 里有 uv / uvx / git；不需要设 IDADIR 环境变量）
+# 外部前置（可选）：IDA GUI 插件 —— 装了才能操作「已打开的 IDA 实例」；
+#   安装：uvx ida-hcli plugin install https://github.com/HexRaysSA/ida-mcp（装完重启 IDA）
+# 没装 GUI 插件也能用（headless：让 MCP 自己用 idalib 打开二进制）。
+# 工具在会话里以 mcp__ida__<tool> 暴露。
+# ---------------------------------------------------------------------------
+- insert:
+    - id: mcp-ida
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: ida
+        transport: stdio
+        command: 'uvx'
+        args:
+          - '--exclude-newer=1s'
+          - 'ida-mcp'
+          - 'stdio'
+          - '--agent=dsh'
+        env:
+          PYTHONUTF8: '1'
+          PYTHONIOENCODING: 'utf-8'
+        toolCallTimeoutMs: 600000
