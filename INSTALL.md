@@ -736,6 +736,12 @@ dsh plugin --profile web add github:dondai44423/donsetch-dsh
 要点：
 
 - 前置：**pnpm**、Node ≥ 22.19；装完**首次启动必须联网**（下二进制）。
+- ⚠️ **需要代理的机器：首次安装下载会失败**（插件用 `node:https.request`，**不读** `HTTPS_PROXY` / `NODE_USE_ENV_PROXY`），
+  症状 = `could not reach .../releases/download (network down?)` + `registered tools (0)`，且**失败被缓存、只能重启 dsh web**。
+  绕法：用能走代理的 `fetch` 取 release tarball + 官方 `.sha256` 校验，解包后**整目录（`donsetch.exe` +
+  `onnxruntime.dll` + `pdfium.dll`，缺 DLL 会 exit 1 无输出）**落位到
+  `%USERPROFILE%\.cache\donsetch\dsh\bin\<版本>\`，再重启。完整步骤与预检见 `plugins\donsetch\RECIPE.md`。
+  本机（2026-09-28）即以此法补上 v4.3.7 并验证通过。
 - git 依赖但 `dist/` 已提交 → **没有 prepare 构建，不触发 `allowBuilds`**（本机实测 5.2 秒装完，
   `pnpm-workspace.yaml` 零改动）。
 - 装完 `package.json` 应有：`dependencies` + `"@dsh-external/donsetch": "github:dondai44423/donsetch-dsh"`、

@@ -53,6 +53,30 @@ $d = Get-ChildItem "$env:USERPROFILE\.cache\donsetch" -Recurse -Filter donsetch.
 & $d.FullName keys add <provider> <key>   # BYOK（可选，默认 keyless）
 ```
 
+## 代理 / 受限网络下的首次安装（本机坑，2026-09-28 实测）
+
+插件的二进制下载器走 `node:https.request`（`dist/binary.js` 的 `httpGet`），**不读** `HTTP_PROXY` / `HTTPS_PROXY` /
+`NODE_USE_ENV_PROXY`（Node 24 的 `NODE_USE_ENV_PROXY=1` 只作用于 `fetch` / undici）。**需要代理才能出网的机器，
+插件首次 boot 必然下载失败**：
+
+```
+state: could not reach https://github.com/dondai44423/donsetch/releases/download (network down?) while installing donsetch v4.3.6
+registered tools (0): (none)
+```
+
+- 该失败**被插件缓存**，运行中不重试（`donsetch_status` 一直回同一条旧错）→ **只能重启 dsh web**。
+- 绕法（本机实测可行）：用能走代理的 `fetch` 下载 release tarball + 官方 `.sha256` 校验，解包后
+  **整目录**落位到 `%USERPROFILE%\.cache\donsetch\dsh\bin\<version>\` —— 这是 `resolveBinary` 的**第 2 优先级**
+  （扫该目录，取目录名可解析 semver 里最新的一个），命中就不再下载。
+- ⚠️ **必须整目录**：`donsetch.exe` + `onnxruntime.dll` + `pdfium.dll`。
+  **只放 exe 会启动即退出、无任何输出、exit 1**（本机踩过，别重复）。
+- 目录名用纯 semver（如 `4.3.7`）。插件 pinned 是 `v4.3.6`，但 resolve 取"已装最新"，放更新的版本即可；
+  autoUpdate 检查后也会跳过。
+- 重启前预检（很有用）：直接对该二进制跑 stdio MCP —— `initialize` 应回 `donsetch 4.3.7`，
+  `tools/list` 应回 4 个工具（`web_fetch` / `web_search` / `web_crawl` / `web_screenshot`）。
+- 顺带一条观察：本机 `node:https.request` 直连 `api.github.com` 返回 **403**（说明**我的 shell 环境**里 https 能到达 GitHub，
+  只是 API 拒绝无 UA 的 HEAD）；但 **dsh web 进程的环境未必相同** —— 不必在这上面排查，手动放二进制最快。
+
 ## 验证
 
 - 插件层：`dsh --profile web --dump-config | Select-String 'donsetch'`；

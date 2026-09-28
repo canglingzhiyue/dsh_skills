@@ -14,6 +14,44 @@
 
 ---
 
+## 2026-09-28 — donsetch 首次安装被代理挡住：手动补二进制 + 记录绕法
+
+### 变更类型
+
+运行期修复（无条目增删）：补上 donsetch 插件缺失的二进制，并把绕法记进配方。
+
+### 内容
+
+用户重启 DSH 后测试，`donsetch_status` 报首次安装失败：
+
+```
+state: could not reach https://github.com/dondai44423/donsetch/releases/download (network down?) while installing donsetch v4.3.6
+registered tools (0): (none)
+```
+
+- **根因**：插件二进制下载器用 `node:https.request`（`dist/binary.js`），**不读** `HTTP_PROXY` / `HTTPS_PROXY` /
+  `NODE_USE_ENV_PROXY`（Node 24 的该变量只作用于 `fetch`）；本机出网靠代理 `127.0.0.1:7890` → 直连 GitHub 失败。
+- **修复**：用能走代理的 `fetch` 下载 `donsetch-win32-x64.tar.gz` + 官方 `.sha256`（SHA256 校验通过），
+  解包后**整目录**（`donsetch.exe` + `onnxruntime.dll` + `pdfium.dll`）落位到
+  `C:\Users\y\.cache\donsetch\dsh\bin\4.3.7\` —— 命中 `resolveBinary` 第 2 优先级（缓存里的最新版本），插件无需再下载。
+  中途踩坑：**只放 exe 会启动即退出、无输出、exit 1**（缺 DLL），已改正。
+- **预检**：对该二进制跑 stdio MCP → `initialize` = `donsetch 4.3.7`，`tools/list` = 4 个工具
+  （`web_fetch` / `web_search` / `web_crawl` / `web_screenshot`），daemon 正常。
+- **仍需重启一次 `dsh web`**：插件把首次 boot 的失败缓存在进程内，不热重试。
+
+### 原因
+
+本机是"必须走代理才能出网"的环境，而插件下载器不认代理 —— 属于**新环境迁移必踩**的坑，必须写进配方。
+
+### 影响
+
+- `plugins\donsetch\RECIPE.md`（新增「代理 / 受限网络下的首次安装」一节：根因、绕法、整目录要求、预检命令）
+- `INSTALL.md`（donsetch 节要点补一条同款警告）
+- `SKILLS.md`（追加日志一条）
+- 本机：`C:\Users\y\.cache\donsetch\dsh\bin\4.3.7\`（3 个文件，19 MB + 2 个 DLL）
+
+---
+
 ## 2026-09-28 — donsetch 用户调整：卸载全局 CLI + 新增 web-search-router 自动路由 skill
 
 ### 变更类型
