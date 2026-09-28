@@ -72,9 +72,14 @@ Copy-Item .\package.json "$dst\" -Force
 loader 用 `import()` 加载（实测有效），省掉 pnpm 依赖与 `allowBuilds`。路径里的用户名
 按本机调整。
 
-**生效方式**：本机 profile 设了 `patchReload: live`，**改完即热重载生效，不用重启**
-（实测：改完 `cordis.patch.yml` 后，同一会话下一条命令立刻被拦）。
-若某台机器是 `startup`，则需重启。
+**生效方式（两种改动行为不同，均已实测）**：
+
+- **改 `cordis.patch.yml`（挂载配置）→ 热重载立即生效，不用重启。** 本机 profile 设了
+  `patchReload: live`；实测改完配置后，同一会话的下一条命令立刻被拦。
+- **改插件源码 `lib\index.js` → 必须重启 DSH。** 热重载只重放**配置补丁**，不会重新
+  `import` 已经加载过的模块（ESM 模块缓存）—— 实测：改完源码后拦截日志仍是旧格式，
+  重启后才变成新格式。
+- 若某台机器 profile 是 `startup`，则两种改动都需要重启。
 
 ## 拦截范围
 

@@ -561,3 +561,21 @@ hooks.json 语法；matcher 写法；profile 差异（新建隔离 profile `hook
 隔离 profile `hooktest`、`test-hook.mjs`、`test-hooks.json`、旧适配层两个文件、
 `hook-trace.log` **全部走回收站**（可还原）；会话自建的 `%TEMP%` 诊断文件硬删。
 `$DSH_HOME\context-mode\` 现只剩 `content/`、`sessions/`、`ctx-router.log`。
+
+### 验证（用户"检查是否生效"）
+
+- `Get-ChildItem <目录> -Recurse -File` → **被拦**，提示 `（命中：递归目录扫描）`；
+- `pwd` → **正常放行**；
+- `ctx-router.log` 已积累 23 条拦截，其中包含**另一个并行会话**（taobao 逆向）的命令 ——
+  证明对所有会话**全局生效**。
+
+### 补记（同日，验证阶段）：源码改动需重启；拦截日志已加强
+
+- **`patchReload: live` 只重放配置补丁，不会重新 `import` 已加载过的模块**（ESM 缓存）：
+  改 `cordis.patch.yml` 热重载即时生效；**改 `lib\index.js` 必须重启** `dsh web`
+  （实测：改完源码后拦截日志仍输出旧格式，重启后才变）。
+- 首版拦截日志只存命令前 200 字符、且不记命中原因 → 22 条拦截里 **10 条无法反推命中规则**，
+  其中几条表面无害（`New-Item` 建目录、`git config user.name`、`adb shell settings put`、
+  跑 `python.exe`、`Get-Process` 查进程），但当时**无法证明是否误拦**。
+- 日志已改为记录 `why=`（命中规则）、`arglen=`（命令总长）、`arg=`（前 400 字符）；
+  `routeReason` 返回 `{reason, why}`。**该加强需重启后生效**（首版拦截功能本身正常）。

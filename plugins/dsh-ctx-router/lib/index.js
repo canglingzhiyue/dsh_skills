@@ -76,7 +76,9 @@ function routeReason(exec) {
     if (args.limit !== undefined || args.offset !== undefined) return undefined;
     try {
       const info = statSync(file);
-      if (info.isFile() && info.size > MAX_READ_BYTES) return HINT_READ;
+      if (info.isFile() && info.size > MAX_READ_BYTES) {
+        return { reason: HINT_READ, why: `大文件整读 ${(info.size / 1024 / 1024).toFixed(2)} MB` };
+      }
     } catch {
       /* unreadable path: not this guard's business */
     }
@@ -88,7 +90,7 @@ function routeReason(exec) {
   if (typeof command !== 'string' || command.length === 0) return undefined;
   if (command.includes(ESCAPE)) return undefined;
   for (const { re, why } of BIG_OUTPUT) {
-    if (re.test(command)) return `${HINT_EXEC}\n\n（命中：${why}）`;
+    if (re.test(command)) return { reason: `${HINT_EXEC}\n\n（命中：${why}）`, why };
   }
   return undefined;
 }
@@ -96,10 +98,15 @@ function routeReason(exec) {
 export function apply(ctx) {
   ctx.on('tools/pre-execute', async (exec, next) => {
     try {
-      const reason = routeReason(exec);
-      if (reason !== undefined) {
-        log(`DENY  tool=${exec?.name}  cmd=${JSON.stringify(exec?.arguments?.command ?? exec?.arguments?.file_path ?? '').slice(0, 200)}`);
-        return { kind: 'deny', reason };
+      const hit = routeReason(exec);
+      if (hit !== undefined) {
+        const target = exec?.arguments?.command ?? exec?.arguments?.file_path ?? '';
+        log(
+          `DENY  tool=${exec?.name}  why=${hit.why}` +
+          `  arglen=${typeof target === 'string' ? target.length : 0}` +
+          `  arg=${JSON.stringify(target).slice(0, 400)}`,
+        );
+        return { kind: 'deny', reason: hit.reason };
       }
     } catch (error) {
       log(`ERROR ${String(error && error.message)} — allowed`);

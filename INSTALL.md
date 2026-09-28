@@ -1179,8 +1179,10 @@ $Py = 'D:\AI_python\firerpa\.venv\Scripts\python.exe'
   `limit`/`offset` 且 > 256 KB。**不拦** `grep`/`web_fetch`/`glob`/`edit`/`write` 与改状态操作。
   **逃生舱**：命令含 `ctx-allow`、或 `read` 带 `limit`/`offset` → 放行；插件内部 fail-open（绝不阻断会话）。
   **每次拦截**往 `$DSH_HOME\context-mode\ctx-router.log` 记一行。
-  **生效**：本机 profile 是 `patchReload: live`，**改完即热重载生效、不需要重启**
-  （实测同一会话下一条命令立刻被拦）；若某台机器是 `startup` 则需重启。
+  **生效**：改 `cordis.patch.yml`（挂载配置）时，本机 profile 是 `patchReload: live`，
+  **改完即热重载、不需要重启**（实测同一会话下一条命令立刻被拦）；但**改插件源码
+  `lib\index.js` 必须重启**（热重载不会重新 `import` 已加载的模块，ESM 缓存）；
+  若某台机器 profile 是 `startup`，则两种改动都要重启。
   **验证**：发一条 `Get-ChildItem <目录> -Recurse -File` 应被 deny 并提示改用 `ctx_*`，
   且 `ctx-router.log` 出现 `DENY tool=pwsh`；`pwd` 应正常放行。
   **仍未接**：`SessionStart` 上下文注入与 `PostToolUse` 会话捕获 —— 由 `$DSH_HOME\AGENTS.md`
