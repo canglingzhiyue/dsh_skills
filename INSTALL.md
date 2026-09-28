@@ -1144,52 +1144,56 @@ $Py = 'D:\AI_python\firerpa\.venv\Scripts\python.exe'
 - ⚠️ **DSH 不在它的官方 17 平台清单内**：11 个 MCP 工具可用（走 standalone MCP 模式），
   但它的 hook 层不认识 DSH 的工具名（见下「自动路由」）。也就是说它**不会自动抢走** `Bash` / `Read`：
   要真省上下文，得靠下面的自动路由，或提示词与常驻规则引导。
-- ✅ **自动路由（自制适配层，必须重建）**：挂载后由 DSH 的 hook 拦截缝自动拦截"抓大块数据"的调用。
-  三块组成、两块要手建：
+- ✅ **自动路由（自写原生插件 `ctx-router`，必须重建）**：由 DSH 自己的拦截缝 `tools/pre-execute`
+  自动拦截"抓大块数据"的工具调用，改道 `ctx_*` 沙箱。
 
   | 组件 | 来源 | 落在哪 |
   |---|---|---|
-  | `dsh-pretooluse-hook.mjs` | **自制**，唯一副本在 `plugins\context-mode-dsh-hook\` | `$DSH_HOME\context-mode\` |
-  | `dsh-hooks.json` | **自制**，同上（matcher 用 DSH 真实工具名 `pwsh`/`read`） | `$DSH_HOME\context-mode\` |
-  | `@deepseek-ai/dsh-hooks-claude-code` | **DSH 自带**（可选桥接，**不在默认 bundle 里**，必须自己挂） | profile 的 `cordis.patch.yml` |
+  | `lib\index.js` + `package.json` | **自制**，源码唯一副本在 `plugins\dsh-ctx-router\` | `$DSH_HOME\plugins\dsh-ctx-router\` |
+  | profile 挂载行（`insert`） | 随 `config\cordis.patch.yml` 恢复 | profile 的 `cordis.patch.yml` |
 
   ```powershell
-  # 自制件落位（两个文件都来自 plugins\context-mode-dsh-hook\）
-  Copy-Item plugins\context-mode-dsh-hook\dsh-pretooluse-hook.mjs "$env:USERPROFILE\.dsh\context-mode\" -Force
-  Copy-Item plugins\context-mode-dsh-hook\dsh-hooks.json         "$env:USERPROFILE\.dsh\context-mode\" -Force
-  # 检查 dsh-hooks.json 里的 node / 脚本绝对路径与本机一致（本机 node = D:\ProgramsDev\nodejs\node.exe）
+  # 落位（两个文件都来自 plugins\dsh-ctx-router\）
+  $dst = "$env:USERPROFILE\.dsh\plugins\dsh-ctx-router"
+  New-Item -ItemType Directory -Force "$dst\lib" | Out-Null
+  Copy-Item plugins\dsh-ctx-router\lib\index.js "$dst\lib\" -Force
+  Copy-Item plugins\dsh-ctx-router\package.json "$dst\" -Force
   ```
-  挂载条目（已随 `config\cordis.patch.yml` 恢复）：
+  挂载条目（已随 `config\cordis.patch.yml` 恢复；注意 `file:///` 是三斜杠）：
   ```yaml
   - insert:
-      - id: hooks-claude-code
-        name: '@deepseek-ai/dsh-hooks-claude-code'
-        config:
-          configPath: 'C:\Users\y\.dsh\context-mode\dsh-hooks.json'
-          defaultTimeoutMs: 15000
+      - id: ctx-router
+        name: 'file:///C:/Users/y/.dsh/plugins/dsh-ctx-router/lib/index.js'
   ```
   **为什么不能直接用官方的 `hooks/hooks.json`**：它里面写的是 Claude Code 的工具名（`Bash`/`Read`），
-  其 `core/routing.mjs` 的工具别名表**写死且无配置扩展点**，DSH 的 `pwsh`/`read`/`grep` 不在表里
-  → 官方 hook 收到 DSH 工具名会直接放行。所以必须用自制适配层接管判断。
-  **拦截范围**：`pwsh` 命中 `curl`/`wget`/`Invoke-WebRequest`/`Invoke-RestMethod`/`Get-Content -Raw`/
-  `cat`/`type`/`Select-String`/`rg`/`findstr`/`docker logs`/`kubectl logs`/`journalctl`/无上限
-  `git log`、`git diff`/`find`/`Get-ChildItem -Recurse`；`read` 未带 `limit`/`offset` 且 > 256 KB。
-  **不拦** `grep`/`web_fetch`/`glob`/`edit`/`write` 与改状态操作。
-  **逃生舱**：命令含 `ctx-allow`、或 `read` 带 `limit`/`offset` → 放行；hook 异常 fail-open（绝不阻断会话）。
-  **验证**：先跑 `plugins\context-mode-dsh-hook\RECIPE.md` 里的离线单测（7 例），
-  **再重启 DSH**（桥接在进程启动时只读一次 `configPath`，热加载不生效 —— 本机实测未重启时
-  hook 事件数为 0、命令不被拦截），重启后发一条 `Get-ChildItem -Recurse` 应被 deny 并提示改用 `ctx_*`。
-  **未接**：`SessionStart` 上下文注入与 `PostToolUse` 会话捕获（依赖它自己的会话/转写格式）——
-  改由 `$DSH_HOME\AGENTS.md` 的常驻规则覆盖，那条规则**不依赖重启**，装完即生效。
+  其 `core/routing.mjs` 的工具别名表**写死且无配置扩展点**，DSH 的 `pwsh`/`read`/`grep`
+  不在表里 → 官方 hook 收到 DSH 工具名会直接放行。
+  **⚠️ 也不要改用 `@deepseek-ai/dsh-hooks-claude-code` 桥接**（本仓库早期试过、已废弃）：
+  它 `inject` 的 `shell` / `sessionProjections` 在 profile 里不满足，cordis 会让它**永远等待、
+  `apply` 永不执行** —— 插件能被 `import`、loader 也不报错，但**一个 hook 都不注册**、配置根本不读。
+  完整证据见 `plugins\dsh-ctx-router\RECIPE.md`。
+  **不需要 `dsh plugin add`**：`insert.name` 直接写 `file:///` URL，cordis loader 用 `import()` 加载。
+  **拦截范围**：`pwsh` / `bash` 命中 `curl`/`wget`/`iwr`/`irm`/`Invoke-WebRequest`/`Invoke-RestMethod`/
+  `Get-Content -Raw`/`cat`/`type`/`Select-String`/`rg`/`findstr`/`docker logs`/`kubectl logs`/
+  `journalctl`/无上限 `git log`、`git diff`/`find`/`Get-ChildItem -Recurse`；`read` 未带
+  `limit`/`offset` 且 > 256 KB。**不拦** `grep`/`web_fetch`/`glob`/`edit`/`write` 与改状态操作。
+  **逃生舱**：命令含 `ctx-allow`、或 `read` 带 `limit`/`offset` → 放行；插件内部 fail-open（绝不阻断会话）。
+  **每次拦截**往 `$DSH_HOME\context-mode\ctx-router.log` 记一行。
+  **生效**：本机 profile 是 `patchReload: live`，**改完即热重载生效、不需要重启**
+  （实测同一会话下一条命令立刻被拦）；若某台机器是 `startup` 则需重启。
+  **验证**：发一条 `Get-ChildItem <目录> -Recurse -File` 应被 deny 并提示改用 `ctx_*`，
+  且 `ctx-router.log` 出现 `DENY tool=pwsh`；`pwd` 应正常放行。
+  **仍未接**：`SessionStart` 上下文注入与 `PostToolUse` 会话捕获 —— 由 `$DSH_HOME\AGENTS.md`
+  的常驻规则覆盖（那条规则装完即生效、不依赖重启）。
 - **验证（三层）**：
   1. `context-mode doctor` → `Server test: PASS`、`FTS5 / SQLite: PASS`；
-  2. `dsh --profile web --dump-config` 里出现 `id: mcp-context-mode` 与 `id: hooks-claude-code`；
-  3. 重启 DSH 后会话里出现 `mcp__context-mode__*`（11 个工具），
-     且发一条命中特征的 `pwsh` 命令会被拦（理由里给出 `ctx_batch_execute` 等替代）。
+  2. `dsh --profile web --dump-config` 里出现 `id: mcp-context-mode` 与 `id: ctx-router`；
+  3. 发一条命中特征的 `pwsh` 命令会被拦（理由里给出 `ctx_batch_execute` 等替代），
+     且 `ctx-router.log` 有 `DENY` 行。
 - **升级**：`npm install -g context-mode@latest`（重新取最新版即可，挂载条目里的路径不变）。
-  升级**不影响**自制适配层（没改它的源码）；但若官方调整工具名或路由语义，适配层需复核。
+  升级**不影响**自制插件（没改它的源码）；但若官方调整工具名或路由语义，插件需复核。
 - **不备份**：npm 全局包本身（一条命令可重装）、`CONTEXT_MODE_DIR` 下的 SQLite 数据
-  （运行期会话轨迹与索引，属本机数据）。自制适配层**要备份**（已在 `plugins\context-mode-dsh-hook\`）。
+  （运行期会话轨迹与索引，属本机数据）。自制插件**要备份**（已在 `plugins\dsh-ctx-router\`）。
 
 ### 不迁移 / 不备份
 

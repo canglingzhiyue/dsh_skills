@@ -1,0 +1,14 @@
+{
+  "name": "dsh-ctx-router",
+  "version": "1.0.0",
+  "description": "DSH native PreToolUse router: nudges large-output tool calls into the context-mode sandbox (ctx_*).",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    }
+  },
+  "license": "MIT",
+  "private": true
+}

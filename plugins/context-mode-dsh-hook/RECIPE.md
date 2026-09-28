@@ -1,6 +1,14 @@
-# context-mode-dsh-hook —— 自制适配层（**唯一副本在本目录**）
+# context-mode-dsh-hook —— 自制适配层（**已废弃**，唯一副本仍在本目录存档）
 
-## 这是什么
+> ⚠️ **本方案已废弃（2026-09-28 当日即被取代）**：`@deepseek-ai/dsh-hooks-claude-code` 的
+> `inject = ["shell", "sessionProjections"]` 在本机 profile 里不满足，cordis 会让插件**永远等待、
+> `apply` 永不执行** —— 插件能正常 `import`（loader 不报错），但**一个 hook 都不注册**，配置根本不读。
+> 实测证据见 `plugins\dsh-ctx-router\RECIPE.md` 的「为什么不用 Claude Code hook 桥接」一节
+> （会话日志 hook 事件 = 0；`configPath` 指向不存在文件也无任何警告）。
+> **现役方案是 `plugins\dsh-ctx-router\`（原生 DSH 插件，挂 `tools/pre-execute`）。**
+> 本目录仅作历史存档，**新环境不要再安装这一套**。
+
+## 这是什么（历史方案，仅供追溯）
 
 让 `context-mode`（MCP 挂载，见 `SKILLS.md`）的**自动路由**在 DSH 上真正生效的一层薄适配。
 

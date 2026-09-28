@@ -1,4 +1,4 @@
-﻿<#
+<#
   install.ps1 —— 从 dsh_skills 仓库一键恢复 DSH 环境（skill + MCP + 第三方插件 + 常驻规则）
 
   用法：
@@ -173,11 +173,13 @@ Write-Host @'
        context-mode MCP   : 全局 npm 包装一次即可 —— npm install -g context-mode（前置 Node >= 22.5）
                             （挂载命令指向 <npm 全局根>\context-mode\cli.bundle.mjs；全局根不是
                              D:\ProgramsDev\nodejs 时，改 config\cordis.patch.yml 该条的 command/args）
-                            另需**自制 hook 适配层**（自动路由，DSH 侧的 hook 桥接在 profile 里）：
-                            Copy-Item plugins\context-mode-dsh-hook\dsh-pretooluse-hook.mjs $HOME\.dsh\context-mode\ -Force
-                            Copy-Item plugins\context-mode-dsh-hook\dsh-hooks.json         $HOME\.dsh\context-mode\ -Force
-                            前置检查：dsh-hooks.json 里的 node 与脚本绝对路径须与本机一致
-                            配方 / 拦截范围 / 逃生舱 / 离线验证见 plugins\context-mode-dsh-hook\RECIPE.md
+                            另需**自制原生插件 ctx-router**（自动路由，挂在 DSH 自己的 tools/pre-execute 缝上）：
+                            New-Item -ItemType Directory -Force $HOME\.dsh\plugins\dsh-ctx-router\lib | Out-Null
+                            Copy-Item plugins\dsh-ctx-router\lib\index.js  $HOME\.dsh\plugins\dsh-ctx-router\lib\ -Force
+                            Copy-Item plugins\dsh-ctx-router\package.json  $HOME\.dsh\plugins\dsh-ctx-router\ -Force
+                            配方 / 拦截范围 / 逃生舱 / 验证见 plugins\dsh-ctx-router\RECIPE.md
+                            注意：**不要**改用 @deepseek-ai/dsh-hooks-claude-code 桥接（其 inject 在本 profile
+                            不满足 → cordis 永久等待、apply 永不执行，一个 hook 都不会注册）
        donsetch 插件      : dsh plugin --profile web add github:dondai44423/donsetch-dsh
                              + 可选全局 CLI npm install -g donsetch；配方见 plugins\donsetch\RECIPE.md
   2) 凭据（永不进仓库，必须手填）
@@ -188,7 +190,7 @@ Write-Host @'
        config\cordis.patch.yml 里的 D:\AI_python\... 路径
        AGENTS.md 顶部的「账本目录」路径
        settings.yaml 里的 provider / baseURL
-  5) 重启 DSH —— 插件、MCP 与 hook 桥接都在启动时组合（MCP 热加载；插件与 hooks-claude-code 桥接必须重启）
+  5) 重启 DSH —— 插件与 MCP 在启动时组合（MCP 随 profile 补丁；patchReload:live 时补丁热加载，插件目录类改动需重启）
 '@ -ForegroundColor Gray
 
 Write-Host "`n完成（自动部分）。" -ForegroundColor White

@@ -102,7 +102,8 @@ Format and migration instructions: load the `skills-inventory` skill.
 
 ## 上下文保护 — 大输出走沙箱（context-mode，常驻规则）
 
-本机挂了 `context-mode` MCP（工具名 `mcp__context-mode__ctx_*`，另有 PreToolUse hook 兜底拦截）。
+本机挂了 `context-mode` MCP（工具名 `mcp__context-mode__ctx_*`，另有自写插件 `ctx-router`
+在 DSH 的 `tools/pre-execute` 缝上兜底拦截，见 `plugins\dsh-ctx-router\RECIPE.md`）。
 **凡是为了"从中得出结论"而读的数据，都不要直接读进上下文** —— 原始字节留在沙箱，只把结论拿回来。
 
 - 日志 / HTML / 大 JSON / CSV / 多文件统计 / 目录扫描 → `mcp__context-mode__ctx_execute`

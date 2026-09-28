@@ -499,3 +499,65 @@ registered tools (0): (none)
 - 本机路径含中文的会话工作区（`D:\AI_python\无实际文件区`）**不能放 firerpa 脚本** ——
   `import lamda` 会因 `grpc_tools.protoc` 的 `path.encode("ascii")` 崩 `UnicodeEncodeError`。
   已知并记录在 `skills/firerpa/SKILL.md` §8.1。
+
+---
+
+## 2026-09-28 — 更正：context-mode 自动路由改为自写原生 DSH 插件 `ctx-router`
+
+**背景**：同日早些时候的条目声称"自动路由已实现、重启后生效"。用户重启 `dsh web` 后实测，
+按特征挂上去的命令**不被拦截** —— 该结论作废。本条记录真实根因与新解法。
+
+### 根因：hook 桥接插件被 cordis 的 `inject` 永久挂起
+
+`@deepseek-ai/dsh-hooks-claude-code` 的 `inject = ["shell", "sessionProjections"]`。
+cordis 的语义是**声明的服务不满足就永远等待、`apply` 根本不执行**（既不报错也不警告）。
+因此插件包能正常 `import`（loader 不报错），但**一个 hook 都不注册**，配置根本不读。
+
+证据：
+
+- 会话 `session.v3.jsonl.zstd` 里 **hook 事件 = 0**，连不需要 matcher 的 `SessionStart` 也不触发；
+- 把 `configPath` 故意指向不存在的文件，**没有任何警告** —— 因为 `apply` 没跑。
+
+顺带确认（避免误判）：loader 对**解析不到的包**是 **fail-loud**（实测 `ERR_MODULE_NOT_FOUND`
+终止启动），所以"没报错"恰恰证明包解析无辜，卡点是 `inject`。
+
+### 已排除（全部实测）
+
+YAML 缩进/格式；`insert` 语义（`applyEntryPatches`：无 `id` 的 insert 就是
+`data.push(...insert)` 插到顶层）；行 `id` 与插件内部 `name` 同名；`configPath` 相对/绝对；
+hooks.json 语法；matcher 写法；profile 差异（新建隔离 profile `hooktest` 复现，
+且同一个 insert 里挂的 MCP 条目**工作正常** → insert 机制无辜）。
+
+### 新解法：原生插件挂 `tools/pre-execute`
+
+`plugins\dsh-ctx-router\`（自写，源码唯一副本在账本）：
+
+- 拦截缝契约来自 `@deepseek-ai/dsh-tools`：
+  `waterfall(carrier, 'tools/pre-execute', exec, () => ({ kind: 'allow' }))`，
+  返回 `{ kind: 'deny', reason }` → 拦下，`reason` 以 `Error:` 回给模型；handler 形如 `(exec, next)`；
+- `exec` 实测字段：`token, callId, rootCallId, name, signal, agent, deferContext, concludeTurn, arguments`；
+- **不依赖任何服务**，也**不需要 `dsh plugin add`** —— `insert.name` 直接写 `file:///` URL，
+  cordis loader 用 `import()` 加载（实测有效）；
+- 拦截范围 / 逃生舱与旧适配层一致；内部 **fail-open**，绝不阻断会话。
+
+### 实测
+
+- `Get-ChildItem <dir> -Recurse -File` → 被拦，`ctx-router.log` 记 `DENY tool=pwsh`；
+- `pwd` → 正常放行；
+- `dsh --profile web --dump-config` → 出现 `id: ctx-router`（配置树第 644-645 行）；
+- **不需要重启**：本机 profile 是 `patchReload: live`，改完 `cordis.patch.yml` 后
+  **同一会话的下一条命令立刻被拦** —— 同时更正上一条"必须重启"的结论。
+
+### 文件
+
+- 新增 `plugins\dsh-ctx-router\`（`RECIPE.md` + `lib\index.js` + `package.json`）
+- `plugins\context-mode-dsh-hook\RECIPE.md` 顶部加**废弃**警示（存档保留，新环境不再安装）
+- `config\cordis.patch.yml`：`hooks-claude-code` → `ctx-router`
+- `config\AGENTS.md`：常驻规则中"PreToolUse hook 兜底"改为"自写插件 `ctx-router` 兜底"
+- `INSTALL.md` 的 context-mode 节改写；`install.ps1` 落位步骤改写
+
+### 清理
+
+隔离 profile `hooktest`、`test-hook.mjs`、`test-hooks.json`、旧适配层两个文件、
+`hook-trace.log` **全部走回收站**（可还原）；会话自建的 `%TEMP%` 诊断文件硬删。
+`$DSH_HOME\context-mode\` 现只剩 `content/`、`sessions/`、`ctx-router.log`。
