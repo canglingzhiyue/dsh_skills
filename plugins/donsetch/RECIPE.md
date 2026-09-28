@@ -2,13 +2,13 @@
 
 | 项 | 值 |
 |---|---|
-| 类型 | **DSH 插件**（bundle，不是 skill）+ 可选全局 CLI |
+| 类型 | **DSH 插件**（bundle，不是 skill） |
 | 优先级 | P2 独立类 |
 | 来源（插件壳） | https://github.com/dondai44423/donsetch-dsh —— 安装 spec `github:dondai44423/donsetch-dsh` |
 | 来源（本体） | https://github.com/dondai44423/donsetch （Rust 单二进制，AGPL-3.0，发 npm `donsetch` + GitHub Releases） |
 | 本机安装日期 | 2026-09-28 |
-| 本机实测 | 插件 `dsh plugin add` 5.2 秒装完、未触发 allowBuilds；全局 CLI v4.3.6（ocr/rerank features）；`donsetch doctor` 全绿（经本机内网代理 127.0.0.1:7890） |
-| 用途 | 给 DSH agent 提供**本地自研**的网页抓取 / 多引擎搜索 / 爬虫 / PDF OCR / 截图 —— 无需 API key、无账号，自带 Chrome 级 TLS 指纹与反机器人绕过 |
+| 本机变更 | 2026-09-28 应**用户要求卸载了全局 CLI**（`npm uninstall -g donsetch`），CLI 型操作（doctor / login / keys）一律改用**插件下载的内置二进制**（`~\.cache\donsetch\dsh\bin\...\donsetch.exe`）；插件本身不受影响 |
+| 用途 | 给 DSH agent 提供**本地自研**的网页抓取 / 多引擎搜索 / 爬虫 / PDF OCR —— 零 API key、零账号，自带 Chrome 级 TLS 指纹与反机器人绕过；配合 `web-search-router` skill 自动路由 |
 
 ---
 
@@ -16,76 +16,77 @@
 
 DonSeTch = **The web, for AI agents**。Rust 一个二进制，从零实现（自研 HTTP/2、BoringSSL 驱动 Chrome 真实 TLS 指纹、
 自有 HTML→markdown 提取、PDFium 解析 + 像素融合、无头浏览器 Solve-and-Bounce 绕 Cloudflare/DataDome、keyless 搜索聚合 + 本地 ONNX 语义重排）。
-本体有 4 个 MCP 工具（`web_fetch` / `web_search` / `web_crawl` / `web_screenshot`）+ 一套 CLI。
+本体有 4 个 MCP 工具（`web_fetch` / `web_search` / `web_crawl` / `web_screenshot`）。
 
-donsetch-dsh 是把本体接进 DSH 的一级插件：进程内注册为**原生工具**（非 `mcp__*` 前缀）：
+donsetch-dsh 把本体接进 DSH 为**进程内原生工具**（非 `mcp__*` 前缀）：
 
-- `donsetch_web_fetch` —— 任意 URL → 干净 markdown；遇反爬自动升级无头浏览器解决并回蹦 cookie；`focus`/`toc`/`section` 省 token；PDF 自动 OCR
-- `donsetch_web_search` —— keyless 多引擎（Bing 族/DuckDuckGo/Brave/Mojeek/Google + GitHub/Wikipedia/arXiv 等垂直源）本地合并重排；BYOK 可选（Exa/Tavily/Serper/…）
-- `donsetch_web_crawl` —— 同域爬虫，sitemap + 焦点排序 + 续传 token
-- `donsetch_status` —— 自诊断（daemon 状态 / 二进制版本 / doctor 输出），插件降级时 agent 自动调它
-- 首次启动插件自动从 GitHub Releases 下载本平台二进制并 SHA256 校验；之后按 24h 节流自动升级（`autoUpdate` 可关）
+- `donsetch_web_fetch` —— URL → 干净 markdown；反爬自动升级无头浏览器 Solve-and-Bounce；`focus`/`toc`/`section` 省 token；PDF 自动 OCR
+- `donsetch_web_search` —— keyless 多引擎（Bing 族/DuckDuckGo/Brave/Mojeek/Google + GitHub/Wikipedia/arXiv 等垂直源）本地合并重排；BYOK 可选
+- `donsetch_web_crawl` —— 同域爬虫（sitemap + 焦点排序 + 续传 token + 节奏控制）
+- `donsetch_status` —— 自诊断（daemon / 二进制版本 / doctor 输出），插件降级时 agent 自动调它
+- 首次启动插件自动从 GitHub Releases 下载本平台二进制并 SHA256 校验；24h 节流自动升级（`autoUpdate` 可关）
 
-（本体还有 `web_screenshot`，插件壳官方只暴露上述 4 个；另可用全局 CLI 补足截图等能力。）
+> **本机（2026-09-28 起）没有全局 CLI**：命令行验证 / doctor / login / keys 等都用插件内置二进制
+> （见下方「用内置二进制跑 CLI 操作」）。截图工具 `web_screenshot` 插件壳未暴露，CLI 又已卸载 → 本机不可用。
 
 ## 安装
 
-前置：**pnpm**（`dsh plugin` 是它的转发器，本机 12.4.1 ✓）、Node ≥ 22.19；装完**必联网一次**（首次启动下二进制）。
+前置：**pnpm**、Node ≥ 22.19；装完**首次启动必须联网**（下二进制）。
 
 ```powershell
-# ① DSH 原生插件（agent 用）
 dsh plugin --profile web add github:dondai44423/donsetch-dsh
-
-# ② 可选：全局 CLI（命令行直接 fetch/search/crawl + doctor 诊断），本体同一份二进制
-npm install -g donsetch
 ```
 
-- 本机实测：① 5.2 秒装完（git 依赖但 dist/ 已提交，**无 prepare 构建，未触发 `allowBuilds`**，`pnpm-workspace.yaml` 零改动）；
-  ② npm 报 `allow-scripts` 警告但二进制已落位（`<npm 根>\node_modules\donsetch\binaries\donsetch.exe`），无需 approve。
+- git 依赖但 `dist/` 已提交 → **没有 prepare 构建，不触发 `allowBuilds`**（本机实测 5.2 秒装完，`pnpm-workspace.yaml` 零改动）。
 - 装完 `~/.dsh/profiles/web/package.json` 应为：`dependencies` 加 `"@dsh-external/donsetch": "github:dondai44423/donsetch-dsh"`，
   `dsh.profile.bundles` 末尾加 `"@dsh-external/donsetch"`（由 dsh 自动 reconcile）。
 
-## 验证
+## 用内置二进制跑 CLI 操作（本机无全局 CLI）
+
+插件下载的二进制在缓存里（dsh web 重启后首次使用 `donsetch_*` 工具时生成）。定位与调用：
 
 ```powershell
-donsetch doctor                          # 快速全扫（二进制/网络/TLS/浏览器/搜索健康……）
-donsetch --version
-dsh --profile web --dump-config | Select-String 'donsetch'
+$d = Get-ChildItem "$env:USERPROFILE\.cache\donsetch" -Recurse -Filter donsetch.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+& $d.FullName doctor            # 健康检查
+& $d.FullName login <域名>       # 登录墙站点：弹出真实浏览器等用户登录（cookie 入 vault，fetch 自动带）
+& $d.FullName login --status <域名>
+& $d.FullName keys add <provider> <key>   # BYOK（可选，默认 keyless）
 ```
 
-本机 `doctor` 全绿：二进制 v4.3.6（19MB）、egress 经 env 代理 127.0.0.1:7890、JA4 = Chrome 指纹、系统 Chromium 已发现
-（`C:\Users\y\AppData\Local\ms-playwright\chromium-1187\chrome-win\chrome.exe`）、OCR/rerank 模型首次用才下载。
+## 验证
+
+- 插件层：`dsh --profile web --dump-config | Select-String 'donsetch'`；
+- 运行期：**重启 dsh web** 后会话出现 `donsetch_*` 工具，先调 `donsetch_status`；
+- 本机安装时 `doctor` 实测全绿（二进制 v4.3.6 / egress 经 env 代理 127.0.0.1:7890 / JA4 = Chrome 指纹 /
+  系统 Chromium 已发现 / OCR+rerank 模型首次使用才下载）。
 
 ## 必须重启 DSH
 
-bundle 插件在 profile 启动时组合，**运行中的进程不热加载** —— `dsh web` 重启后会话里才出现 `donsetch_*` 工具。
-重启后可用提示词验证：`Use donsetch_web_search to find …`，或直接调 `donsetch_status`。
+bundle 插件在 profile 启动时组合，**运行中的进程不热加载** —— `dsh web` 重启后 `donsetch_*` 工具才出现。
+
+## 登录墙（本机标准流程，用户硬性要求）
+
+见 `web-search-router` skill 的「登录墙 SOP」：命中 401/403/跳转登录/付费墙 → 内置二进制跑 `donsetch login <域名>`
+→ **弹出真实浏览器，停下告知用户登录、等用户确认后再继续** → cookie 入 vault → `donsetch_web_fetch` 自动带登录态重试。
+凭据只由用户在浏览器里输入，agent 不接触密码、不截图、不抓键盘。
 
 ## 配置（可选，不配即用）
 
-- 插件选项走 bundle patch（`$DSH_HOME/profiles/web/cordis.patch.yml` 或 `$DSH_HOME/cordis.patch.yml` 覆盖）：
-  `toolPrefix`（默认 `donsetch`）、`channel`、`autoUpdate`、`callTimeoutMs` 等；环境变量 `DONSETCH_DSH_PREFIX`、`DONSETCH_BIN` 等。
-- 本体的键 / 代理 / 登录会话沿用标准 CLI 配置：
-  ```powershell
-  donsetch keys add exa sk-exa-…          # BYOK 搜索（可选，默认 keyless）
-  donsetch keys default local
-  donsetch proxy add <url>                # 搜索/爬虫代理池（重式使用建议加，防 IP 限流）
-  donsetch login x.com                    # 登录墙后站点（打开你自己的浏览器、自己输凭据，凭据不进 DonSeTch）
-  ```
-- 首次 OCR/rerank 会下载模型（~24MB rerank + ~37MB OCR，缓存永久）。
+- 插件选项走 bundle patch（`toolPrefix` / `channel` / `autoUpdate` / `callTimeoutMs` 等）；
+  环境变量 `DONSETCH_DSH_PREFIX`、`DONSETCH_BIN`（可指向本地二进制）等。
+- 本体键 / 代理 / 登录会话走内置二进制的 `keys` / `proxy` / `login` 子命令。
 
 ## 卸载
 
 ```powershell
-dsh plugin --profile web remove @dsh-external/donsetch   # 插件
-npm uninstall -g donsetch                                 # 全局 CLI（可选）
+dsh plugin --profile web remove @dsh-external/donsetch
 ```
 
-然后重启 dsh。二进制缓存在 `~/.cache/donsetch/`（含 dsh 版本化目录），可手动清。
+然后重启 dsh。二进制缓存 `~/.cache/donsetch/` 可手动清。
 
 ## 维护提醒
 
 - 升级 = 重跑 `dsh plugin --profile web add github:dondai44423/donsetch-dsh`（spec 不锁版本，取最新）；二进制本体自动更新。
 - 插件壳与本体是两套版本线：插件升级不影响二进制，二进制在插件内自动升级。
-- 涉及关键配置/能力变化时同步更新本文件与 `INSTALL.md` 小节。
+- 涉及关键配置/能力变化时同步更新本文件、`INSTALL.md` 小节与 `web-search-router` skill。
 - **不备份**：`node_modules`、插件源码、二进制本体与模型缓存（均可重下）。

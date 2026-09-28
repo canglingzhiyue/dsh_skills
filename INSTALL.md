@@ -713,49 +713,68 @@ dsh plugin --profile web remove @howmp/dsh-pentest    # 然后重启 dsh
 ## donsetch（P2 独立类 · DSH 插件 · 网络来源）
 
 本体 = DonSeTch（Rust 单二进制，https://github.com/dondai44423/donsetch ，AGPL-3.0）：给 AI agent 用的
-网页抓取 / 搜索 / 爬虫 / PDF OCR / 截图，零 API key、零账号、全本地自研（Chrome 真实 TLS 指纹 + 自研 HTTP/2 +
+网页抓取 / 搜索 / 爬虫 / PDF OCR，零 API key、零账号、全本地自研（Chrome 真实 TLS 指纹 + 自研 HTTP/2 +
 无头浏览器绕反爬 + 本地 ONNX 语义重排）。插件壳 = donsetch-dsh（https://github.com/dondai44423/donsetch-dsh），
 把本体注册为 DSH **进程内原生工具**（`donsetch_web_fetch` / `donsetch_web_search` / `donsetch_web_crawl` /
 `donsetch_status`，非 `mcp__*` 前缀），首次启动自动下载本平台二进制并 SHA256 校验、按 24h 节流自动升级。
 
 **与 modsearch 的选择**：modsearch 走云端 Firecrawl keyless（每月 1000 免费额度、免注册），轻、快、够日常；
 donsetch 全本地、能力上限高（绕 Cloudflare/DataDome、PDF OCR、`focus`/`toc` 省 token、续传爬虫、登录会话、
-BYOK、截图），但要下 ~19MB 二进制、配置面大、AGPL-3.0。**两者可共存**（工具名前缀不同，不冲突）。
+BYOK），但要下 ~19MB 二进制、配置面大、AGPL-3.0。**两者可共存**（工具名前缀不同，不冲突）；
+donsetch 的登录墙处理与自动路由统一由 `web-search-router` skill 负责（见下一节）。
 
-配方在 `plugins\donsetch\RECIPE.md` —— 装法（两式，用户选择两个都装）：
+**本机已卸载全局 CLI（2026-09-28，用户要求）**：只装插件、不装 `npm install -g donsetch`。
+CLI 型操作（doctor / login / keys）一律用插件下载的内置二进制（`~\.cache\donsetch\dsh\bin\...\donsetch.exe`，
+定位与示例见下方）。截图工具插件壳未暴露、CLI 又已卸载 → 本机不可用。
+
+配方在 `plugins\donsetch\RECIPE.md` —— 装法：
 
 ```powershell
-# ① DSH 原生插件（agent 用，必装）
 dsh plugin --profile web add github:dondai44423/donsetch-dsh
-
-# ② 全局 CLI（命令行直接 fetch/search + doctor 诊断；可选但推荐）
-npm install -g donsetch
 ```
 
 要点：
 
 - 前置：**pnpm**、Node ≥ 22.19；装完**首次启动必须联网**（下二进制）。
 - git 依赖但 `dist/` 已提交 → **没有 prepare 构建，不触发 `allowBuilds`**（本机实测 5.2 秒装完，
-  `pnpm-workspace.yaml` 零改动）。npm 装 CLI 时若报 `allow-scripts` 警告，复核
-  `<npm 根>\node_modules\donsetch\binaries\donsetch.exe` 已在即可，无需 approve。
+  `pnpm-workspace.yaml` 零改动）。
 - 装完 `package.json` 应有：`dependencies` + `"@dsh-external/donsetch": "github:dondai44423/donsetch-dsh"`、
   `dsh.profile.bundles` 末尾 + `"@dsh-external/donsetch"`。
-- 交互式验证（CLI 侧）：
+- CLI 操作走内置二进制（本机无全局 CLI，安装时 `doctor` 实测全绿）：
   ```powershell
-  donsetch doctor            # 二进制/网络/TLS/浏览器/搜索健康全扫
-  donsetch --version
-  donsetch fetch https://example.com --focus "main"     # 冒烟
-  donsetch search "rust async" --intent code
+  $d = Get-ChildItem "$env:USERPROFILE\.cache\donsetch" -Recurse -Filter donsetch.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+  & $d.FullName doctor            # 二进制/网络/TLS/浏览器/搜索健康全扫
+  & $d.FullName login <域名>       # 登录墙站点（弹出真实浏览器，见 web-search-router SOP）
   ```
-  本机实测 `doctor` 全绿（走 env 代理 127.0.0.1:7890；JA4 = Chrome 指纹；系统 Chromium 被发现）。
-- 其它能力：`donsetch crawl <url> --mode map`、`donsetch screenshot <url> --out x.png`、
-  `donsetch keys add <provider> <key>`（BYOK 可选）、`donsetch login <domain>`（登录墙后站点，凭据不进工具）、
-  `donsetch mcp`（给其它 MCP 客户端用；本机走插件即可，不必再挂）。
 - **必须重启 DSH**（bundle 层不热加载，与 modsearch 同）。重启后会话应出现 `donsetch_*` 工具，
-  可用 `donsetch_status` 自查，或直接让 agent 用 `donsetch_web_search`。
-- 卸载：`dsh plugin --profile web remove @dsh-external/donsetch`（+ 可选 `npm uninstall -g donsetch`），重启 DSH。
+  可用 `donsetch_status` 自查。
+- 卸载：`dsh plugin --profile web remove @dsh-external/donsetch`，重启 DSH；缓存 `~/.cache/donsetch/` 手动清。
 - 配置（可选，不配即用）：插件选项走 bundle patch（`toolPrefix` / `channel` / `autoUpdate` / `callTimeoutMs` 等），
-  本体键/代理/登录走 `donsetch keys|proxy|login`。
+  本体键/代理/登录走内置二进制的 `keys` / `proxy` / `login`。
+
+## web-search-router（P2 独立类 · 本地自制 skill）
+
+**它是什么**：本机联网检索的**自动路由规则**。用户不说工具名（`donsetch_web_search` 之类），由模型按意图选工具：
+
+| 意图 | 工具 |
+|---|---|
+| 普通关键词搜索（时效/新闻/一般查询） | `web_search`（modsearch 插件接管，Firecrawl keyless，省额度） |
+| X / Twitter 内容 | `x_search` |
+| 单页精读（普通站） | `read_page` |
+| 反爬 / JS 壳 / PDF（含扫描件） | `donsetch_web_fetch`（本地无头浏览器 Solve-and-Bounce + OCR） |
+| 多引擎交叉 / 技术向检索 / 更多权威源 | `donsetch_web_search` |
+| 整站 URL 地图 / 同域爬取 | `donsetch_web_crawl` |
+| 401/403 / 跳转登录 / 付费墙 | **登录墙 SOP**（见下） |
+
+**登录墙 SOP（用户硬性要求：弹出网页、等登录、再继续）**：用 donsetch 内置二进制跑
+`donsetch login <域名>` → 用户桌面**弹出真实浏览器** → agent **停下明确告知用户去登录，等用户回复** →
+登录后 cookie 入 vault → `donsetch_web_fetch` 对同域名自动带登录态重试。凭据只由用户在浏览器输入。
+细则（含失败降级）全在 skill 的 `SKILL.md`。
+
+装法：把 `skills\web-search-router\` 整个目录复制到 `$DSH_HOME\skills\web-search-router\`（DSH 原生，即时生效，**无需重启**）。
+同时把 `config\AGENTS.md` 里「搜索与联网检索 —— 自动路由」那段常驻规则写进 `$DSH_HOME/AGENTS.md`
+（本机已生效；它让每个会话默认按本路由行事，不依赖 skill 是否被显式加载）。
+
 
 ## wmpf-miniapp-reverse（P2 独立类 · 本地来源）
 

@@ -14,6 +14,43 @@
 
 ---
 
+## 2026-09-28 — donsetch 用户调整：卸载全局 CLI + 新增 web-search-router 自动路由 skill
+
+### 变更类型
+
+插件调整（移除全局 CLI）+ 新增 1 个本地自制 skill（`web-search-router`）；无 MCP 增减。
+
+### 内容
+
+用户反馈后做的三点调整：
+
+1. **卸载全局 CLI `donsetch`**（`npm uninstall -g donsetch`）：用户不需要 CLI。CLI 型操作
+   （`doctor` / `login` / `keys`）改走**插件内置二进制**（`~\.cache\donsetch\dsh\bin\...\donsetch.exe`）。
+   插件本体不受影响（二进制由插件自行下载管理）。
+2. **新增 `web-search-router` skill**（本地自制，`$DSH_HOME\skills\web-search-router\`，即时生效）：
+   多搜索工具的**自动路由表** —— 普通搜索→`web_search`（modsearch 引擎）、X→`x_search`、单页→`read_page`、
+   反爬/JS 壳/PDF→`donsetch_web_fetch`、多引擎/技术向→`donsetch_web_search`、整站→`donsetch_web_crawl`。
+3. **登录墙 SOP（硬性要求）**：401/403/跳转登录/付费墙 → 内置二进制 `donsetch login <域名>` 弹**真实浏览器**
+   → agent **停下告知用户登录、等用户回复再继续** → cookie 入 vault → `donsetch_web_fetch` 自动带登录态重试。
+   凭据只由用户在浏览器输入，agent 不碰密码/不截图/不抓键盘。
+4. **常驻规则**：`$DSH_HOME/AGENTS.md` 新增「搜索与联网检索 —— 自动路由」段（每个会话默认生效）。
+
+### 原因
+
+用户要求：① "我就不需要那个cli了"；② "直接说用 donsetch_web_search 查…太麻烦了"，
+要有几个搜索自动决定用哪个；③ "遇到需要登录的网站，donsetch 需要弹出来网页等待我登录后再继续"。
+
+### 影响
+
+- `plugins\donsetch\RECIPE.md`（整篇重写：CLI 卸载、内置二进制用法、登录墙流程）
+- `SKILLS.md`（donsetch 行同批更正 + web-search-router 新行 + 两条补记 + 日志）
+- `INSTALL.md`（donsetch 节重写 + 新增 web-search-router 节）
+- `config\AGENTS.md`（同步新增常驻段）
+- `skills\web-search-router\SKILL.md`（新增镜像，唯一副本）
+- 本机：`D:\ProgramsDev\nodejs`（npm 全局包卸载，经包管理器）
+
+---
+
 ## 2026-09-28 — context-mode 补上自动路由（自制 hook 适配层）+ 清理 OpenClaw 残留
 
 ### 变更类型
