@@ -944,7 +944,7 @@ $Py = 'D:\AI_python\firerpa\.venv\Scripts\python.exe'
 
 ## MCP（P2 独立类 · 网络来源 + 本地运行时）
 
-本机在 `<profile>\cordis.patch.yml` 里挂了 **3 个 MCP server**。它们**不是 skill、也不是 npm 插件**，
+本机在 `<profile>\cordis.patch.yml` 里挂了 **4 个 MCP server**。它们**不是 skill、也不是 npm 插件**，
 而是一条 DSH 配置（`@deepseek-ai/dsh-mcp-client` 的 `insert` 条目）—— 但同样必须迁移，
 否则新环境会少掉这些工具。配置文件整份备份在 **`config\cordis.patch.yml`**。
 
@@ -957,6 +957,7 @@ $Py = 'D:\AI_python\firerpa\.venv\Scripts\python.exe'
 | camoufox | `camoufox` | `mcp__camoufox__*` | `D:\AI_python\camoufox\.venv`（约 2.3 GB，见下） |
 | jadx | `jadx` | `mcp__jadx__*` | `D:\AI_python\MCP\MCP合集\jadx-mcp-server`（约 41 MB，见下） |
 | ida | `ida` | `mcp__ida__*` | 本机 IDA 9.4 的 idalib（无独立目录，`uvx` 跑 PyPI 包，见下） |
+| context-mode | `context-mode` | `mcp__context-mode__*` | 全局 npm 包（`npm install -g context-mode`，无独立目录，见下） |
 
 ### camoufox MCP
 
@@ -1040,9 +1041,50 @@ $Py = 'D:\AI_python\firerpa\.venv\Scripts\python.exe'
   `%APPDATA%\HexRays\IDA Pro\plugins\ida-mcp\`（hcli 可重装）、IDA 的 `venv`（可重建）、
   IDA 本体与 license（用户自行安装）。挂载条目已在 `config\cordis.patch.yml` 里。
 
+### context-mode MCP
+
+- **上游**：https://github.com/mksglu/context-mode （npm 包名同为 `context-mode`，Elastic-2.0 许可）
+- **它做什么**：把大块工具输出挡在上下文之外 —— 在沙箱子进程里跑代码 / 抓网页 / 建索引，只把结论回传
+  （官方基准 315 KB → 5.4 KB）；另带 SQLite 会话记忆与 FTS5 知识库检索。共 **11 个工具**：
+  `ctx_execute` / `ctx_execute_file` / `ctx_index` / `ctx_search` / `ctx_fetch_and_index` /
+  `ctx_batch_execute`（沙箱与索引）+ `ctx_stats` / `ctx_doctor` / `ctx_upgrade` / `ctx_purge` /
+  `ctx_insight`（meta）。
+- **重建运行时（一条命令）**：
+
+  ```powershell
+  npm install -g context-mode     # 前置 Node >= 22.5
+  # 本机落在 D:\ProgramsDev\nodejs\node_modules\context-mode（全局根 = D:\ProgramsDev\nodejs）
+  ```
+  它依赖原生模块 `better-sqlite3`。npm 可能报 `allow-scripts` 警告（install script 未登记）——
+  **先复核二进制是否已落位**，再决定要不要 `npm approve-scripts`：
+
+  ```powershell
+  Get-ChildItem "$(npm root -g)\context-mode\node_modules\better-sqlite3" -Recurse -Filter *.node
+  # 出现 better_sqlite3.node（约 1.9 MB）即正常；再跑 context-mode doctor 应报 FTS5 / SQLite: PASS
+  ```
+- **命令**（挂载条目里写死的形态）：`node <npm 全局根>\context-mode\cli.bundle.mjs`
+  —— **不带任何参数就是 stdio MCP server**。刻意不用 `context-mode.cmd` shim：
+  Windows 下 spawn `.cmd` 需要 shell。若新环境的 npm 全局根不是 `D:\ProgramsDev\nodejs`，
+  改 `config\cordis.patch.yml` 该条的 `command` / `args`。
+- ⚠️ **必须显式设 `CONTEXT_MODE_DIR`**：它自己做平台探测，**只要 `~/.openclaw\` 目录存在就会把平台判成
+  OpenClaw**（medium confidence），存储随之写到 `~/.openclaw/context-mode/`。挂载条目里已设
+  `CONTEXT_MODE_DIR=C:\Users\y\.dsh\context-mode` 把它收回 `$DSH_HOME`；新环境照着改这一行路径。
+- ⚠️ **DSH 不在它的官方 17 平台清单内**：11 个 MCP 工具可用（走 standalone MCP 模式），
+  但**没有 hook 层强制路由**（官方 hooks 只认 Claude Code / Cursor / VS Code Copilot / Codex CLI /
+  Gemini CLI / OpenCode 等宿主）。也就是说它**不会自动抢走** `Bash` / `Read`：
+  要真省上下文，得在提示词里要求、或模型自觉改用 `ctx_execute` / `ctx_fetch_and_index`。
+  官方对比：有 hook ≈ 省 98%，无 hook ≈ 省 60%。
+- **验证（三层）**：
+  1. `context-mode doctor` → `Server test: PASS`、`FTS5 / SQLite: PASS`；
+  2. `dsh --profile web --dump-config` 里出现 `id: mcp-context-mode` 条目；
+  3. 重启 DSH 后会话里出现 `mcp__context-mode__*`（11 个工具），例如向 `ctx_stats` 要一份节省报告。
+- **升级**：`npm install -g context-mode@latest`（重新取最新版即可，挂载条目里的路径不变）。
+- **不备份**：npm 全局包本身（一条命令可重装）、`CONTEXT_MODE_DIR` 下的 SQLite 数据
+  （运行期会话轨迹与索引，属本机数据）。
+
 ### 不迁移 / 不备份
 
-三个 MCP 依赖的运行时（camoufox 的 venv+引擎约 **2.3 GB**、jadx 约 **41 MB**）**只记配方、不备份**；
-`ida` 没有独立运行时目录（`uvx` 跑 PyPI 包，只依赖本机 IDA 的 idalib）。
+四个 MCP 依赖的运行时（camoufox 的 venv+引擎约 **2.3 GB**、jadx 约 **41 MB**）**只记配方、不备份**；
+`ida` 与 `context-mode` 都没有独立运行时目录（`uvx` 跑 PyPI 包 / 全局 npm 包）。
 MCP 的挂载条目已在 `config\cordis.patch.yml` 里。JADX-GUI 及其插件、IDA 本体与其 license、
 IDA GUI 插件目录都属于**外部工具**，不在本仓库范围内 —— 需要用户自行安装。

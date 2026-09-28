@@ -170,6 +170,9 @@ Write-Host @'
                             uvx ida-hcli plugin install 'ida-mcp@https://github.com/hexrayssa/ida-mcp'
                             报 PEP 668 / not a virtual environment 时先跑：uvx ida-hcli ida python create-environment
                             （hcli 不读 git 代理，需自行给 HTTP_PROXY/HTTPS_PROXY）
+       context-mode MCP   : 全局 npm 包装一次即可 —— npm install -g context-mode（前置 Node >= 22.5）
+                            （挂载命令指向 <npm 全局根>\context-mode\cli.bundle.mjs；全局根不是
+                             D:\ProgramsDev\nodejs 时，改 config\cordis.patch.yml 该条的 command/args）
   2) 凭据（永不进仓库，必须手填）
        $DSH_HOME\.credentials.yaml —— DEEPSEEK_API_KEY / CLAUDEX_API_KEY / DS_1ZHE_API_KEY
   3) 登录态（永不进仓库）

@@ -14,6 +14,62 @@
 
 ---
 
+## 2026-09-28 — 新增第四个 MCP 挂载：context-mode（上下文窗口优化）
+
+### 变更类型
+
+新增 **MCP 挂载**（既不是 skill 也不是插件）；无 skill / 插件增减。
+
+### 内容
+
+用户要求安装 <https://github.com/mksglu/context-mode>，并要求说明"这是什么、怎么用"，
+且**装完不要在会话工作区留文件**。
+
+- **它是什么**：MCP server，把大块工具输出（curl / 日志 / 网页 / Playwright 快照 / 几 MB JSON）
+  留在沙箱子进程里处理，只回传结论（官方基准 315 KB → 5.4 KB）；另带 SQLite 会话记忆
+  （对话压缩后可续）与 FTS5 知识库检索。共 **11 个工具**：`ctx_execute` / `ctx_execute_file` /
+  `ctx_index` / `ctx_search` / `ctx_fetch_and_index` / `ctx_batch_execute` +
+  `ctx_stats` / `ctx_doctor` / `ctx_upgrade` / `ctx_purge` / `ctx_insight`。
+- **安装**：`npm install -g context-mode` → **1.0.169**（Elastic-2.0，前置 Node ≥ 22.5），
+  落在 `D:\ProgramsDev\nodejs\node_modules\context-mode` —— **在工作区之外**，满足用户要求。
+  npm 的 `allow-scripts` 警告未造成影响：`better_sqlite3.node` 已在位，`doctor` 的 FTS5 自检 PASS。
+- **挂载**：`config\cordis.patch.yml` 新增 `id: mcp-context-mode` / `serverName: context-mode`，
+  命令 `node D:\ProgramsDev\nodejs\node_modules\context-mode\cli.bundle.mjs`（不用 `.cmd` shim ——
+  Windows 下 spawn `.cmd` 需要 shell），`toolCallTimeoutMs: 300000`，并显式设
+  `CONTEXT_MODE_DIR=C:\Users\y\.dsh\context-mode`。
+- **为什么必须设 `CONTEXT_MODE_DIR`**：它自己做平台探测，**看到 `~/.openclaw\` 就判成 OpenClaw**
+  （用户 2026-03 装过 OpenClaw，属预先存在的目录），否则存储会落到 `~/.openclaw/context-mode/`。
+- **平台限制**：DSH 不在其官方 17 平台清单内 → 11 个 MCP 工具可用、但**没有 hook 层强制路由**
+  （官方对比：有 hook ≈ 省 98%，无 hook ≈ 省 60%）。
+- **验证**：stdio 探针 `initialize` + `tools/list` → 11 个工具；`context-mode doctor` → Server test PASS、
+  FTS5 / SQLite PASS；`dsh --profile web --dump-config` 出现该条目。
+
+### 原因
+
+上下文窗口是长会话的主要瓶颈；该工具纯本地（无遥测、无账号），与本机既有的"在大输出上进沙箱"用法一致。
+
+### 影响文件
+
+- `config\cordis.patch.yml`（新增挂载条目，已与 profile 同步）
+- `SKILLS.md`（表格加 1 行 + 「当前 MCP 共 4 个」补记 + 日志）
+- `INSTALL.md`（MCP 节 3 → 4 个 + 表格加 1 行 + 新增「context-mode MCP」小节）
+- `install.ps1`（待办清单补一条：新环境需 `npm install -g context-mode`）
+- `CHANGELOG.md`（本条）
+
+### 未做 / 不做
+
+- 不跑 `npm approve-scripts`（实测无影响，原生产物已在位）。
+- 不备份 npm 全局包本身与 `CONTEXT_MODE_DIR` 下的 SQLite 数据（后者是运行期会话数据）。
+
+### 顺带记录
+
+- 本次同步时发现 `config\settings.yaml` 已被**用户自己**修改（默认模型由 `ds-1zhe/deepseek-flash`
+  改为 `claudex/deepseek-v4.1-flash`，并移除 `ds-1zhe` provider 与其两个模型定义）——
+  按「`config\` 任何文件被改都要重新同步」的规则一并备份，非本次安装所致。
+- 本次第二次踩到 `dev-hygiene` 的 `Remove-ToRecycleBin.ps1` **空目录缺陷**
+  （`Set-StrictMode -Latest` 下对空集合取 `Measure-Object -Sum` 的 `.Sum` 抛"找不到属性 Sum"）——
+  仍按上次做法用同款 `Microsoft.VisualBasic.FileIO.FileSystem` 回收站 API 完成删除，**脚本未改动**。
+
 ## 2026-09-26 — 新增第三个 MCP 挂载：Hex-Rays 官方 IDA MCP（`ida-mcp`）
 
 ### 变更类型
