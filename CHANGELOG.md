@@ -14,6 +14,83 @@
 
 ---
 
+## 2026-09-28 — context-mode 补上自动路由（自制 hook 适配层）+ 清理 OpenClaw 残留
+
+### 变更类型
+
+新增**自制适配层**（`plugins\context-mode-dsh-hook\`）+ 新增一个 **DSH hook 桥接挂载**
++ 修改**常驻规则**（`AGENTS.md` 新增一节）+ 环境清理（删除 `~/.openclaw`）。
+
+### 内容
+
+用户追问"这个不能自动在会话中激活使用吗？每次会话那么多文件要读，没办法一个一个去指定"，
+并要求"**如果没办法自动使用的话就不要安装了，卸载掉**"，同时要求"顺便把 openclaw 也清理掉"。
+
+**结论：自动路由能做出来，已实现。**
+
+- **根因**：context-mode 的官方 hook 用 `hooks/core/routing.mjs` 里**写死的** `TOOL_ALIASES`
+  表识别工具（只有 Claude Code 的 `Bash`/`Read`/`Grep`/`WebFetch`/`Glob`），
+  DSH 的 `pwsh`/`read`/`grep` 不在表里、**没有配置扩展点** → 官方 hook 收到 DSH 工具名直接放行。
+  且 DSH 的 hook 拦截缝默认是空的：`@deepseek-ai/dsh-hooks-claude-code`
+  **不在 `--dump-default-config` 的默认 bundle 里**（实测默认层 586 行、零 hook 条目），
+  属可选桥接插件，必须自己挂。
+- **解法**：新增自制适配层 `plugins\context-mode-dsh-hook\`（**唯一副本**）——
+  `dsh-pretooluse-hook.mjs` + `dsh-hooks.json`（matcher 用 DSH 真实工具名）+ `RECIPE.md`；
+  在 `cordis.patch.yml` 挂 `@deepseek-ai/dsh-hooks-claude-code` 指向该配置。
+- **拦截范围（保守）**：`pwsh` 命中 `curl`/`wget`/`Invoke-WebRequest`/`Invoke-RestMethod`/
+  `Get-Content -Raw`/`cat`/`type`/`Select-String`/`rg`/`findstr`/`docker logs`/`kubectl logs`/
+  `journalctl`/无上限 `git log`、`git diff`/`find`/`Get-ChildItem -Recurse`；
+  `read` 未带 `limit`/`offset` 且 > 256 KB。**不拦** `grep`/`web_fetch`/`glob`/`edit`/`write`
+  与改状态操作（构建、测试、写文件、建目录）。
+  **逃生舱**：命令含 `ctx-allow`、或 `read` 带 `limit`/`offset` → 放行；hook 异常 **fail-open**。
+- **常驻规则**：`$DSH_HOME\AGENTS.md` 新增「上下文保护 — 大输出走沙箱（context-mode）」一节，
+  写明各场景该用哪个 `ctx_*` 工具与"仍然直接用原生工具"的边界。
+  这条**不依赖重启**，装完即对所有会话生效，是 hook 之外的第二道保险。
+- **OpenClaw 清理**：`C:\Users\y\.openclaw` 经清点为**纯残留壳**（仅一个 232 B 的
+  `autorun_state.json`，`enabled:false` 且自 2026-03-26 创建后从未运行；无进程、无全局包、
+  无计划任务、无快捷方式，共 0.2 KB）。**已走回收站删除**（可还原）。
+  它正是此前把 context-mode 平台探测误导为 OpenClaw 的元凶。
+
+### 验证
+
+- **离线单测 7 例全部符合预期**：`Get-ChildItem -Recurse` → deny；`git status --short` → 放行；
+  `curl` → deny；`curl ... # ctx-allow` → 放行；`read` 大文件无 limit → deny；
+  `read` 带 `limit:100` → 放行；`grep` → 放行。
+- `dsh --profile web --dump-config` 出现 `id: hooks-claude-code` + `configPath` + `defaultTimeoutMs`。
+- **端到端待重启**：适配层挂上后实测一条 `Get-ChildItem -Recurse` 未被拦截，
+  且当前会话 `session.v3.jsonl.zstd` 的 **hook 事件数为 0** —— 证实桥接
+  "**配置在进程启动时只读一次**"，**必须重启 `dsh web`**。故 `SKILLS.md` 同条目 ④ 中
+  "DSH 里没有强制路由"一句应读作"**重启前**没有"。
+- 自制件 SHA256 与 `$DSH_HOME` 实件核对一致。
+
+### 原因
+
+用户的核心诉求是"不想每次手动指定用哪个工具"。若做不到自动，用户选择卸载；
+经查 DSH 自带 hook 拦截缝 + Claude Code 桥接插件，自动路由可实现，故保留并补齐。
+
+### 影响文件
+
+- 新增 `plugins\context-mode-dsh-hook\`（`RECIPE.md` + `dsh-pretooluse-hook.mjs` + `dsh-hooks.json`）
+- `config\cordis.patch.yml`（新增 `hooks-claude-code` 挂载；因覆盖在 bundle 层，需重启才注册）
+- `config\AGENTS.md`（新增「上下文保护」一节；**该文件已同步到仓库**）
+- `SKILLS.md`（追加更正与说明日志一条）
+- `INSTALL.md`（context-mode 小节新增「自动路由」段与重建步骤）
+- `install.ps1`（待办补自制件落位步骤）
+- `CHANGELOG.md`（本条）
+
+### 未做 / 不做
+
+- **未接** `SessionStart` 上下文注入与 `PostToolUse` 会话捕获：依赖 context-mode 自己的
+  会话/转写格式（DSH 的 `transcript_path` 恒为空、会话日志是 zstd 压缩的 `session.v3.jsonl.zstd`），
+  且官方注入块是 Claude Code 专属工具名 —— 改由常驻 `AGENTS.md` 规则覆盖。
+- 未跑 `npm approve-scripts`（先前已确认原生产物在位、无实际影响）。
+- 未卸载 context-mode（用户的条件是"做不到自动就卸载"，而自动已实现）。
+
+### 顺带记录
+
+- 本次记账期间**另一个会话同时提交了 donsetch 条目**（commit `b095b3d`，已 push）。
+  本条目所有改动按**追加**方式落在其后，未覆盖对方内容。
+
 ## 2026-09-28 — 安装 donsetch（DSH 插件 + 可选全局 CLI）
 
 ### 变更类型

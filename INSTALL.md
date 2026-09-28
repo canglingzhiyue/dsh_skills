@@ -1117,17 +1117,54 @@ $Py = 'D:\AI_python\firerpa\.venv\Scripts\python.exe'
   OpenClaw**（medium confidence），存储随之写到 `~/.openclaw/context-mode/`。挂载条目里已设
   `CONTEXT_MODE_DIR=C:\Users\y\.dsh\context-mode` 把它收回 `$DSH_HOME`；新环境照着改这一行路径。
 - ⚠️ **DSH 不在它的官方 17 平台清单内**：11 个 MCP 工具可用（走 standalone MCP 模式），
-  但**没有 hook 层强制路由**（官方 hooks 只认 Claude Code / Cursor / VS Code Copilot / Codex CLI /
-  Gemini CLI / OpenCode 等宿主）。也就是说它**不会自动抢走** `Bash` / `Read`：
-  要真省上下文，得在提示词里要求、或模型自觉改用 `ctx_execute` / `ctx_fetch_and_index`。
-  官方对比：有 hook ≈ 省 98%，无 hook ≈ 省 60%。
+  但它的 hook 层不认识 DSH 的工具名（见下「自动路由」）。也就是说它**不会自动抢走** `Bash` / `Read`：
+  要真省上下文，得靠下面的自动路由，或提示词与常驻规则引导。
+- ✅ **自动路由（自制适配层，必须重建）**：挂载后由 DSH 的 hook 拦截缝自动拦截"抓大块数据"的调用。
+  三块组成、两块要手建：
+
+  | 组件 | 来源 | 落在哪 |
+  |---|---|---|
+  | `dsh-pretooluse-hook.mjs` | **自制**，唯一副本在 `plugins\context-mode-dsh-hook\` | `$DSH_HOME\context-mode\` |
+  | `dsh-hooks.json` | **自制**，同上（matcher 用 DSH 真实工具名 `pwsh`/`read`） | `$DSH_HOME\context-mode\` |
+  | `@deepseek-ai/dsh-hooks-claude-code` | **DSH 自带**（可选桥接，**不在默认 bundle 里**，必须自己挂） | profile 的 `cordis.patch.yml` |
+
+  ```powershell
+  # 自制件落位（两个文件都来自 plugins\context-mode-dsh-hook\）
+  Copy-Item plugins\context-mode-dsh-hook\dsh-pretooluse-hook.mjs "$env:USERPROFILE\.dsh\context-mode\" -Force
+  Copy-Item plugins\context-mode-dsh-hook\dsh-hooks.json         "$env:USERPROFILE\.dsh\context-mode\" -Force
+  # 检查 dsh-hooks.json 里的 node / 脚本绝对路径与本机一致（本机 node = D:\ProgramsDev\nodejs\node.exe）
+  ```
+  挂载条目（已随 `config\cordis.patch.yml` 恢复）：
+  ```yaml
+  - insert:
+      - id: hooks-claude-code
+        name: '@deepseek-ai/dsh-hooks-claude-code'
+        config:
+          configPath: 'C:\Users\y\.dsh\context-mode\dsh-hooks.json'
+          defaultTimeoutMs: 15000
+  ```
+  **为什么不能直接用官方的 `hooks/hooks.json`**：它里面写的是 Claude Code 的工具名（`Bash`/`Read`），
+  其 `core/routing.mjs` 的工具别名表**写死且无配置扩展点**，DSH 的 `pwsh`/`read`/`grep` 不在表里
+  → 官方 hook 收到 DSH 工具名会直接放行。所以必须用自制适配层接管判断。
+  **拦截范围**：`pwsh` 命中 `curl`/`wget`/`Invoke-WebRequest`/`Invoke-RestMethod`/`Get-Content -Raw`/
+  `cat`/`type`/`Select-String`/`rg`/`findstr`/`docker logs`/`kubectl logs`/`journalctl`/无上限
+  `git log`、`git diff`/`find`/`Get-ChildItem -Recurse`；`read` 未带 `limit`/`offset` 且 > 256 KB。
+  **不拦** `grep`/`web_fetch`/`glob`/`edit`/`write` 与改状态操作。
+  **逃生舱**：命令含 `ctx-allow`、或 `read` 带 `limit`/`offset` → 放行；hook 异常 fail-open（绝不阻断会话）。
+  **验证**：先跑 `plugins\context-mode-dsh-hook\RECIPE.md` 里的离线单测（7 例），
+  **再重启 DSH**（桥接在进程启动时只读一次 `configPath`，热加载不生效 —— 本机实测未重启时
+  hook 事件数为 0、命令不被拦截），重启后发一条 `Get-ChildItem -Recurse` 应被 deny 并提示改用 `ctx_*`。
+  **未接**：`SessionStart` 上下文注入与 `PostToolUse` 会话捕获（依赖它自己的会话/转写格式）——
+  改由 `$DSH_HOME\AGENTS.md` 的常驻规则覆盖，那条规则**不依赖重启**，装完即生效。
 - **验证（三层）**：
   1. `context-mode doctor` → `Server test: PASS`、`FTS5 / SQLite: PASS`；
-  2. `dsh --profile web --dump-config` 里出现 `id: mcp-context-mode` 条目；
-  3. 重启 DSH 后会话里出现 `mcp__context-mode__*`（11 个工具），例如向 `ctx_stats` 要一份节省报告。
+  2. `dsh --profile web --dump-config` 里出现 `id: mcp-context-mode` 与 `id: hooks-claude-code`；
+  3. 重启 DSH 后会话里出现 `mcp__context-mode__*`（11 个工具），
+     且发一条命中特征的 `pwsh` 命令会被拦（理由里给出 `ctx_batch_execute` 等替代）。
 - **升级**：`npm install -g context-mode@latest`（重新取最新版即可，挂载条目里的路径不变）。
+  升级**不影响**自制适配层（没改它的源码）；但若官方调整工具名或路由语义，适配层需复核。
 - **不备份**：npm 全局包本身（一条命令可重装）、`CONTEXT_MODE_DIR` 下的 SQLite 数据
-  （运行期会话轨迹与索引，属本机数据）。
+  （运行期会话轨迹与索引，属本机数据）。自制适配层**要备份**（已在 `plugins\context-mode-dsh-hook\`）。
 
 ### 不迁移 / 不备份
 

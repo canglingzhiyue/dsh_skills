@@ -1,4 +1,4 @@
-<#
+﻿<#
   install.ps1 —— 从 dsh_skills 仓库一键恢复 DSH 环境（skill + MCP + 第三方插件 + 常驻规则）
 
   用法：
@@ -171,10 +171,15 @@ Write-Host @'
                             报 PEP 668 / not a virtual environment 时先跑：uvx ida-hcli ida python create-environment
                             （hcli 不读 git 代理，需自行给 HTTP_PROXY/HTTPS_PROXY）
        context-mode MCP   : 全局 npm 包装一次即可 —— npm install -g context-mode（前置 Node >= 22.5）
-        donsetch 插件      : dsh plugin --profile web add github:dondai44423/donsetch-dsh
-                             + 可选全局 CLI npm install -g donsetch；配方见 plugins\donsetch\RECIPE.md
                             （挂载命令指向 <npm 全局根>\context-mode\cli.bundle.mjs；全局根不是
                              D:\ProgramsDev\nodejs 时，改 config\cordis.patch.yml 该条的 command/args）
+                            另需**自制 hook 适配层**（自动路由，DSH 侧的 hook 桥接在 profile 里）：
+                            Copy-Item plugins\context-mode-dsh-hook\dsh-pretooluse-hook.mjs $HOME\.dsh\context-mode\ -Force
+                            Copy-Item plugins\context-mode-dsh-hook\dsh-hooks.json         $HOME\.dsh\context-mode\ -Force
+                            前置检查：dsh-hooks.json 里的 node 与脚本绝对路径须与本机一致
+                            配方 / 拦截范围 / 逃生舱 / 离线验证见 plugins\context-mode-dsh-hook\RECIPE.md
+       donsetch 插件      : dsh plugin --profile web add github:dondai44423/donsetch-dsh
+                             + 可选全局 CLI npm install -g donsetch；配方见 plugins\donsetch\RECIPE.md
   2) 凭据（永不进仓库，必须手填）
        $DSH_HOME\.credentials.yaml —— DEEPSEEK_API_KEY / CLAUDEX_API_KEY / DS_1ZHE_API_KEY
   3) 登录态（永不进仓库）
@@ -183,7 +188,7 @@ Write-Host @'
        config\cordis.patch.yml 里的 D:\AI_python\... 路径
        AGENTS.md 顶部的「账本目录」路径
        settings.yaml 里的 provider / baseURL
-  5) 重启 DSH —— 插件与 MCP 都在启动时组合，不重启不生效
+  5) 重启 DSH —— 插件、MCP 与 hook 桥接都在启动时组合（MCP 热加载；插件与 hooks-claude-code 桥接必须重启）
 '@ -ForegroundColor Gray
 
 Write-Host "`n完成（自动部分）。" -ForegroundColor White

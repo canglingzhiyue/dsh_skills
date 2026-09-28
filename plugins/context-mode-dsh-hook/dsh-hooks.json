@@ -1,0 +1,25 @@
+{
+  "description": "DSH ← context-mode 路由 hook（自制适配层）。官方 hook 只认 Claude Code 的工具名（Bash/Read/Grep），在 DSH 里会直接放行；这份配置用 DSH 的真实工具名（pwsh / read）匹配，交给 dsh-pretooluse-hook.mjs 判断是否该把这次调用改走 ctx_* 沙箱。",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "pwsh",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"D:/ProgramsDev/nodejs/node.exe\" \"C:/Users/y/.dsh/context-mode/dsh-pretooluse-hook.mjs\""
+          }
+        ]
+      },
+      {
+        "matcher": "read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"D:/ProgramsDev/nodejs/node.exe\" \"C:/Users/y/.dsh/context-mode/dsh-pretooluse-hook.mjs\""
+          }
+        ]
+      }
+    ]
+  }
+}
