@@ -47,7 +47,13 @@ if (-not $d) { Write-Host '二进制尚未下载：先重启 dsh web，调用一
 ## 2. 失败降级
 
 - `donsetch_web_search` 结果弱 / 超时 → 回退 `web_search`，反之亦然。
-- `donsetch_web_fetch` 明确报 `wall.challenge` 且拿不到 cookies → 如实告诉用户"该站拦截自动化，需要人工浏览器操作"，**不要死循环重试**。
+- **国外站点空结果 / 超时**：donsetch 是**本地出网**，daemon 由 dsh 启动、**不继承 shell 代理** ——
+  先确认代理池已配（`<内置二进制> proxy add http://127.0.0.1:7890`，落在 `%LOCALAPPDATA%\donsetch\proxies.txt`，
+  改完热生效、不用重启）；探测报 `dead no exit IP returned` 不代表代理不可用。
+- **Cloudflare 交互式挑战**（报 `blocked … interactive captcha or challenge could not be solved automatically`
+  或提示 "Use an Agent browser"）：donsetch 的自动绕过到此为止 —— **不要死循环重试**；
+  改走本机 **`camoufox-reverse`**（反指纹浏览器 + MCP）打开该页，或如实告诉用户需要人工处理。
+- `donsetch_web_crawl` 的 `mode="map"` 在无 sitemap 的站会返回空 URL 列表（不是故障）→ 要正文改用 `mode="full"`。
 - donsetch 工具不可用（未重启 / 二进制缺失）→ 用 `web_search` / `read_page` 顶住并提醒用户重启 dsh web 后 donsetch 才可用。
 
 ## 3. 什么时候不要走本路由

@@ -742,6 +742,9 @@ dsh plugin --profile web add github:dondai44423/donsetch-dsh
   `onnxruntime.dll` + `pdfium.dll`，缺 DLL 会 exit 1 无输出）**落位到
   `%USERPROFILE%\.cache\donsetch\dsh\bin\<版本>\`，再重启。完整步骤与预检见 `plugins\donsetch\RECIPE.md`。
   本机（2026-09-28）即以此法补上 v4.3.7 并验证通过。
+- ⚠️ **装完还要给 daemon 配代理**（它不继承 shell 的 `HTTPS_PROXY`，国外站会直连失败）：
+  `<内置二进制> proxy add http://127.0.0.1:7890`，配置落在 `%LOCALAPPDATA%\donsetch\proxies.txt`，
+  **改完热生效、不用重启**。探测报 `dead no exit IP returned` 属探测端点被直连所致，不代表代理不可用。
 - git 依赖但 `dist/` 已提交 → **没有 prepare 构建，不触发 `allowBuilds`**（本机实测 5.2 秒装完，
   `pnpm-workspace.yaml` 零改动）。
 - 装完 `package.json` 应有：`dependencies` + `"@dsh-external/donsetch": "github:dondai44423/donsetch-dsh"`、

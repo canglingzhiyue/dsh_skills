@@ -14,6 +14,41 @@
 
 ---
 
+## 2026-09-28 — donsetch 验收通过：补齐 daemon 代理池 + 记录能力边界
+
+### 变更类型
+
+配置补齐 + 文档记录（无条目增删）。
+
+### 内容
+
+用户重启后验收：`donsetch_status` = **ready**，注册 4 个工具（`donsetch_web_fetch` / `donsetch_web_search` /
+`donsetch_web_crawl` / `donsetch_web_screenshot`），doctor **22/26 passed、0 failed**。实测：
+
+- **搜索**：keyless 多引擎返回带来源条目（`3/4 backends available`，非全部后端可用）；
+- **抓取**：`example.com`、`baidu.com`、`news.ycombinator.com` 均正常；
+- **爬虫**：`docs.python.org` 的 `mode="full"` 抓到正文；`mode="map"` 在无 sitemap 站返回空列表（工具行为，非故障）；
+- **反爬边界（诚实记录）**：`nowsecure.nl` 的 Cloudflare **交互式挑战**报
+  `interactive captcha or challenge could not be solved automatically … Use an Agent browser` ——
+  自动绕过到此为止，应改走本机 `camoufox-reverse`，不要死循环重试。
+
+**本次新发现并补齐的必做配置**：daemon 由 dsh 进程 spawn，**不继承 shell 的 `HTTPS_PROXY`** → 国外站直连失败。
+解法：`<内置二进制> proxy add http://127.0.0.1:7890`（落在 `%LOCALAPPDATA%\donsetch\proxies.txt`，
+**热生效、不用重启**）。注意探测输出 `dead no exit IP returned` 有误导性（探测端点被规则直连），实测代理可用。
+
+### 原因
+
+用户提示"国外网站要使用本地代理"；且 donsetch 的自动绕过能力需要写清边界，避免后续会话在挑战页上反复失败。
+
+### 影响
+
+- `plugins\donsetch\RECIPE.md`（新增「本机必做：给 daemon 配代理池」+ 能力边界 + crawl map 说明）
+- `INSTALL.md`（donsetch 节补代理池要点）
+- `skills\web-search-router\SKILL.md`（失败降级段补 3 条：代理池、Cloudflare 挑战转向 camoufox、crawl map 语义）+ 账本镜像
+- `SKILLS.md`（追加日志）
+
+---
+
 ## 2026-09-28 — donsetch 首次安装被代理挡住：手动补二进制 + 记录绕法
 
 ### 变更类型

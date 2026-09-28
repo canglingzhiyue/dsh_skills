@@ -94,6 +94,26 @@ bundle 插件在 profile 启动时组合，**运行中的进程不热加载** �
 → **弹出真实浏览器，停下告知用户登录、等用户确认后再继续** → cookie 入 vault → `donsetch_web_fetch` 自动带登录态重试。
 凭据只由用户在浏览器里输入，agent 不接触密码、不截图、不抓键盘。
 
+## 本机必做：给 daemon 配代理池（国外站，2026-09-28 实测）
+
+donsetch daemon 由 dsh 进程 spawn，**不继承你 shell 里的 `HTTPS_PROXY`** —— 于是国外站直连：超时、空结果、
+搜索后端大面积不可用。修法（**不需要重启**，插件监视配置后热切 daemon）：
+
+```powershell
+$d = Get-ChildItem "$env:USERPROFILE\.cache\donsetch" -Recurse -Filter donsetch.exe | Select-Object -First 1
+& $d.FullName proxy add http://127.0.0.1:7890      # 可加 --no-check 跳过探测
+& $d.FullName proxy list                            # 配置落在 %LOCALAPPDATA%\donsetch\proxies.txt
+```
+
+⚠️ `proxy add` / `proxy check` 可能报 **`dead no exit IP returned`** —— 那是它的探测端点被 Clash 规则直连所致，
+**不代表代理不可用**：本机加完后实测 `donsetch_web_fetch` 抓 `https://news.ycombinator.com` 成功、
+`crawl` 用 `full` 模式抓到 `docs.python.org` 正文。要跳过探测就加 `--no-check`。
+
+**能力边界（诚实记录）**：Cloudflare **交互式挑战**（Turnstile 等）解不了，报
+`blocked … interactive captcha or challenge could not be solved automatically … Use an Agent browser` ——
+这时改走本机 `camoufox-reverse`（反指纹浏览器 MCP）或让用户人工处理，**别死循环重试**。
+另：`crawl` 的 `mode="map"` 在没有 sitemap 的站会返回空 URL 列表（不是故障），要正文用 `mode="full"`。
+
 ## 配置（可选，不配即用）
 
 - 插件选项走 bundle patch（`toolPrefix` / `channel` / `autoUpdate` / `callTimeoutMs` 等）；
