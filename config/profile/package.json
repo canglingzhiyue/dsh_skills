@@ -9,12 +9,14 @@
         "dsh-think-zh",
         "@liustack/modsearch",
         "@howmp/dsh-pentest",
-        "dsh-ding"
+        "dsh-ding",
+        "@dsh-external/donsetch"
       ],
       "patchReload": "live"
     }
   },
   "dependencies": {
+    "@dsh-external/donsetch": "github:dondai44423/donsetch-dsh",
     "@howmp/dsh-pentest": "https://github.com/howmp/dsh-pentest/releases/latest/download/dsh-pentest.tar.gz",
     "@liustack/modsearch": "5.10.3",
     "dsh-ding": "github:CAOGGL/dsh-ding",

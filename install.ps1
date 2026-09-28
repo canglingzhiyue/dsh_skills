@@ -1,4 +1,4 @@
-﻿<#
+<#
   install.ps1 —— 从 dsh_skills 仓库一键恢复 DSH 环境（skill + MCP + 第三方插件 + 常驻规则）
 
   用法：
@@ -171,6 +171,8 @@ Write-Host @'
                             报 PEP 668 / not a virtual environment 时先跑：uvx ida-hcli ida python create-environment
                             （hcli 不读 git 代理，需自行给 HTTP_PROXY/HTTPS_PROXY）
        context-mode MCP   : 全局 npm 包装一次即可 —— npm install -g context-mode（前置 Node >= 22.5）
+        donsetch 插件      : dsh plugin --profile web add github:dondai44423/donsetch-dsh
+                             + 可选全局 CLI npm install -g donsetch；配方见 plugins\donsetch\RECIPE.md
                             （挂载命令指向 <npm 全局根>\context-mode\cli.bundle.mjs；全局根不是
                              D:\ProgramsDev\nodejs 时，改 config\cordis.patch.yml 该条的 command/args）
   2) 凭据（永不进仓库，必须手填）

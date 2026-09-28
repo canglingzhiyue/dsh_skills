@@ -105,3 +105,27 @@
         env:
           CONTEXT_MODE_DIR: 'C:\Users\y\.dsh\context-mode'
         toolCallTimeoutMs: 300000
+
+# ---------------------------------------------------------------------------
+# DSH hook 桥接 —— 把 context-mode 的「自动路由」接到 DSH 的拦截缝上
+# 背景：context-mode 官方的 PreToolUse hook 用一张**写死的**平台工具名别名表识别工具
+#   （只认 Claude Code 的 Bash / Read / Grep …），DSH 的工具叫 pwsh / read / grep，
+#   表里没有、也没有配置扩展点 → 官方 hook 在 DSH 里收到工具名会直接放行，等于没装。
+# 做法：用 DSH 自带的 @deepseek-ai/dsh-hooks-claude-code（在 DSH 的拦截缝上跑
+#   Claude Code 格式的 hooks.json），配置指向**自制适配层**：
+#     C:\Users\y\.dsh\context-mode\dsh-hooks.json    ← matcher 用 DSH 真实工具名
+#     C:\Users\y\.dsh\context-mode\dsh-pretooluse-hook.mjs   ← 自制判断逻辑（唯一副本在此）
+#   适配层只拦最明确的「数据抓取」（curl/wget/Invoke-*/Get-Content -Raw/cat/rg/
+#   Select-String/docker logs/无上限 git log、diff/Get-ChildItem -Recurse，以及无
+#   limit 读 > 256 KB 的文件），deny 时给出 ctx_* 替代用法。
+#   逃生舱：命令里含 `ctx-allow`，或 read 显式带 limit/offset → 放行（不会死锁）。
+#   hook 崩溃一律 fail-open，不阻断会话。
+# 注意：这是**自制件**，context-mode 升级不受影响（没改它的源码）；
+#   但若官方调整了工具名或路由语义，本适配层需复核。
+# ---------------------------------------------------------------------------
+- insert:
+    - id: hooks-claude-code
+      name: '@deepseek-ai/dsh-hooks-claude-code'
+      config:
+        configPath: 'C:\Users\y\.dsh\context-mode\dsh-hooks.json'
+        defaultTimeoutMs: 15000

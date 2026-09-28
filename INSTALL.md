@@ -710,6 +710,53 @@ dsh plugin --profile web remove @howmp/dsh-pentest    # 然后重启 dsh
 想改渗透的提示词/工具集：预设不支持继承，整目录复制 `preset\pentest\`（保留 `pentest-` 前缀会立即显示）。
 `storages\pentest-sessions.db` 是运行期数据，不进备份。
 
+## donsetch（P2 独立类 · DSH 插件 · 网络来源）
+
+本体 = DonSeTch（Rust 单二进制，https://github.com/dondai44423/donsetch ，AGPL-3.0）：给 AI agent 用的
+网页抓取 / 搜索 / 爬虫 / PDF OCR / 截图，零 API key、零账号、全本地自研（Chrome 真实 TLS 指纹 + 自研 HTTP/2 +
+无头浏览器绕反爬 + 本地 ONNX 语义重排）。插件壳 = donsetch-dsh（https://github.com/dondai44423/donsetch-dsh），
+把本体注册为 DSH **进程内原生工具**（`donsetch_web_fetch` / `donsetch_web_search` / `donsetch_web_crawl` /
+`donsetch_status`，非 `mcp__*` 前缀），首次启动自动下载本平台二进制并 SHA256 校验、按 24h 节流自动升级。
+
+**与 modsearch 的选择**：modsearch 走云端 Firecrawl keyless（每月 1000 免费额度、免注册），轻、快、够日常；
+donsetch 全本地、能力上限高（绕 Cloudflare/DataDome、PDF OCR、`focus`/`toc` 省 token、续传爬虫、登录会话、
+BYOK、截图），但要下 ~19MB 二进制、配置面大、AGPL-3.0。**两者可共存**（工具名前缀不同，不冲突）。
+
+配方在 `plugins\donsetch\RECIPE.md` —— 装法（两式，用户选择两个都装）：
+
+```powershell
+# ① DSH 原生插件（agent 用，必装）
+dsh plugin --profile web add github:dondai44423/donsetch-dsh
+
+# ② 全局 CLI（命令行直接 fetch/search + doctor 诊断；可选但推荐）
+npm install -g donsetch
+```
+
+要点：
+
+- 前置：**pnpm**、Node ≥ 22.19；装完**首次启动必须联网**（下二进制）。
+- git 依赖但 `dist/` 已提交 → **没有 prepare 构建，不触发 `allowBuilds`**（本机实测 5.2 秒装完，
+  `pnpm-workspace.yaml` 零改动）。npm 装 CLI 时若报 `allow-scripts` 警告，复核
+  `<npm 根>\node_modules\donsetch\binaries\donsetch.exe` 已在即可，无需 approve。
+- 装完 `package.json` 应有：`dependencies` + `"@dsh-external/donsetch": "github:dondai44423/donsetch-dsh"`、
+  `dsh.profile.bundles` 末尾 + `"@dsh-external/donsetch"`。
+- 交互式验证（CLI 侧）：
+  ```powershell
+  donsetch doctor            # 二进制/网络/TLS/浏览器/搜索健康全扫
+  donsetch --version
+  donsetch fetch https://example.com --focus "main"     # 冒烟
+  donsetch search "rust async" --intent code
+  ```
+  本机实测 `doctor` 全绿（走 env 代理 127.0.0.1:7890；JA4 = Chrome 指纹；系统 Chromium 被发现）。
+- 其它能力：`donsetch crawl <url> --mode map`、`donsetch screenshot <url> --out x.png`、
+  `donsetch keys add <provider> <key>`（BYOK 可选）、`donsetch login <domain>`（登录墙后站点，凭据不进工具）、
+  `donsetch mcp`（给其它 MCP 客户端用；本机走插件即可，不必再挂）。
+- **必须重启 DSH**（bundle 层不热加载，与 modsearch 同）。重启后会话应出现 `donsetch_*` 工具，
+  可用 `donsetch_status` 自查，或直接让 agent 用 `donsetch_web_search`。
+- 卸载：`dsh plugin --profile web remove @dsh-external/donsetch`（+ 可选 `npm uninstall -g donsetch`），重启 DSH。
+- 配置（可选，不配即用）：插件选项走 bundle patch（`toolPrefix` / `channel` / `autoUpdate` / `callTimeoutMs` 等），
+  本体键/代理/登录走 `donsetch keys|proxy|login`。
+
 ## wmpf-miniapp-reverse（P2 独立类 · 本地来源）
 
 **它是什么**：本机 WMPFDebugger（微信小程序远程调试 / 逆向工具：Frida 注入 `WeChatAppEx.exe`

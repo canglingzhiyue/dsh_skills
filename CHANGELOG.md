@@ -14,6 +14,45 @@
 
 ---
 
+## 2026-09-28 — 安装 donsetch（DSH 插件 + 可选全局 CLI）
+
+### 变更类型
+
+新增 **DSH 插件**（第 5 个：`@dsh-external/donsetch` ← `github:dondai44423/donsetch-dsh`）；
+另有同源全局 CLI 工具 `donsetch`（npm 包，非 DSH 挂载）。
+
+### 内容
+
+用户要求安装 <https://github.com/dondai44423/donsetch>，并说明"这是什么、怎么用"、
+"装完不要在当前文件夹留文件"。
+
+- **它是什么**：DonSeTch —— Rust 单二进制的 Web 研究工具（fetch / search / crawl / screenshot / PDF OCR），
+  给 AI agent 用；零 API key、零账号、全本地自研（Chrome 真实 TLS 指纹 + 自研 HTTP/2 + 无头浏览器绕反爬 +
+  本地 ONNX 语义重排）。donsetch-dsh 插件壳把它注册为 DSH 进程内原生工具
+  `donsetch_web_fetch` / `donsetch_web_search` / `donsetch_web_crawl` / `donsetch_status`。
+- **为什么装两式（用户拍板「两个都装」）**：全局 CLI 立即可用 + doctor 诊断；DSH 插件给 agent 用
+  （需重启生效）。
+- **与 modsearch 的区别**（用户已装 `@liustack/modsearch`）：modsearch 是云端 Firecrawl keyless 驱动的
+  轻量搜索（npm 包小、1000 免费额度/月、MIT）；donsetch 是本地的重工具（自有传输/提取/PDF/搜索聚合/爬虫
+  引擎，能绕反爬、OCR、省 token、续传爬虫、登录会话、BYOK，AGPL-3.0）。两者工具名前缀不同、可共存。
+- **安装**：`npm install -g donsetch`（v4.3.6，orc+rerank features，二进制已落位）+ 
+  `dsh plugin --profile web add github:dondai44423/donsetch-dsh`（5.2 秒，未触发 allowBuilds）。
+  全部落在工作区之外（全局 npm 目录 + `$DSH_HOME`），`D:\AI_python\无实际文件区` 复核无新增。
+- **验证**：`donsetch doctor` 全绿（经内网代理 127.0.0.1:7890，JA4 = Chrome 指纹）；`donsetch --version` 正常。
+- **影响文件**：`plugins\donsetch\RECIPE.md`（新增）、`SKILLS.md`（表格行 + 「当前插件共 5 个」补记 + 日志）、
+  `INSTALL.md`（新增 donsetch 小节）、`install.ps1`（待办清单补一条）、`config\profile\package.json`（同步）。
+
+### 原因
+
+用户要求安装并记录；该插件属「非 DSH 自带」，按账本规则纳入三类备份范围。
+
+### 影响
+
+- 插件在 bundle 层：**重启 `dsh web` 后**会话出现 `donsetch_*` 工具。
+- `config\profile\package.json` 需保持与 profile 实际一致（dependencies + bundles 各多一条）。
+
+---
+
 ## 2026-09-28 — 新增第四个 MCP 挂载：context-mode（上下文窗口优化）
 
 ### 变更类型
