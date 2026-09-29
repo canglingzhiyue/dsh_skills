@@ -34,8 +34,8 @@
 
 ## 3. Python 与脚本执行纪律
 
-- **PATH 上的 `python` / `uv` / `uvx` 全部来自 `D:\ProgramsDev\anaconda3`**（实测：`uv` 与 `uvx` 的唯一实体就是 `anaconda3\Scripts\uv.exe`）。按 `dev-hygiene` 红线，**不得用它们装任何 Python 包**；项目内一律用 `uv` 建 `.venv`（`uv venv` + `uv pip install`，清华源）。
-- 注意连带风险：`~/.dsh/profiles/web/cordis.patch.yml` 里 jadx / ida 两个 MCP 的 `command` 就是 `uv` / `uvx` —— 也就是说**这两个 MCP 目前依赖 anaconda 目录里的 uv**。anaconda 若被升级/卸载，MCP 会连带失效。这是已知的幽灵依赖，不是本技能能修的，遇到 MCP 起不来先查这里。
+- **`uv` / `uvx` = `C:\Users\y\.local\bin\uv.exe`**（独立安装的 uv 0.12.20）—— **2026-09-30 已把 anaconda 整机移除**，`D:\ProgramsDev\anaconda3` 不复存在。PATH 上**已无 `python`**：只剩 `C:\Users\y\AppData\Local\Microsoft\WindowsApps\python.exe` 这个 0 字节 Store 存根，**不可用**。项目内一律 `uv venv` + `uv pip install`（清华源）建 `.venv`，并始终用绝对路径或 `uv run`。
+- **（2026-09-30 已修）幽灵依赖解除**：`~/.dsh/profiles/web/cordis.patch.yml` 里 jadx / ida 两个 MCP 的 `command` 已从裸 `uv` / `uvx` 改为绝对路径 `C:\Users\y\.local\bin\uv.exe` / `uvx.exe`，不再依赖 anaconda 目录。MCP 起不来时先查该路径是否存在、以及 `uv cache` 里那两个缓存环境是否还在。
 - 含中文路径会让部分 Python 工具崩（`import lamda` 的 `UnicodeEncodeError` 是实测过的），所以案件与脚本目录一律落纯 ASCII 的 `D:\AI_python\reverse-cases\`。
 - 脚本执行分级见 `reverse-skill-router` 技能 §6：设备/网络绑定脚本（真机 dump、抓包、重打包、`adb install`）**执行前需要一次显式确认**；误跑 `coldstart.py` 这类脚本会留下孤儿 `adb logcat` 进程与近 1 MB 的 logcat 垃圾。
 

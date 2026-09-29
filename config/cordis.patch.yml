@@ -38,7 +38,7 @@
       config:
         serverName: jadx
         transport: stdio
-        command: 'uv'
+        command: 'C:\Users\y\.local\bin\uv.exe'
         args:
           - '--directory'
           - 'D:\AI_python\MCP\MCP合集\jadx-mcp-server'
@@ -68,7 +68,7 @@
       config:
         serverName: ida
         transport: stdio
-        command: 'uvx'
+        command: 'C:\Users\y\.local\bin\uvx.exe'
         args:
           - '--exclude-newer=1s'
           - 'ida-mcp'

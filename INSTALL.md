@@ -1255,3 +1255,56 @@ pwsh -NoProfile -File "$env:USERPROFILE\.dsh\skills\reverse-skill-router\scripts
 `ida` 没有独立运行时目录（`uvx` 跑 PyPI 包）。
 MCP 的挂载条目已在 `config\cordis.patch.yml` 里。JADX-GUI 及其插件、IDA 本体与其 license、
 IDA GUI 插件目录都属于**外部工具**，不在本仓库范围内 —— 需要用户自行安装。
+---
+
+## （2026-09-30）本机彻底移除 Anaconda，全局改用独立 uv
+
+**背景**：用户要求卸载电脑里的 anaconda、全局只用 uv 管理，但**保留原有 conda 环境可用**（仍在用），
+并要求"不留任何缓存和碎片"、不破坏已有的其他虚拟环境。
+
+**结论：anaconda 与所有现存虚拟环境完全解耦 —— 卸载不影响任何一个。**
+实测依据：11 个 `.venv` 的 `pyvenv.cfg` 全部指向 uv 托管解释器或自身目录，**没有一个引用 anaconda**。
+
+### 做了什么
+
+| # | 动作 | 结果 |
+|---|---|---|
+| 1 | 独立安装 uv（不依赖任何 python 发行版） | `C:\Users\y\.local\bin\uv.exe`（uv 0.12.20）+ `uvx.exe` / `uvw.exe`；已置于用户 PATH 最前 |
+| 2 | 逐个重建 5 个 conda 环境为 uv 环境（**原地**建在 `D:\dev\py\env\<同名>`，保住 PyCharm `homePath` 与硬编码引用） | `163` 3.10.21 / `dashixiong` 3.12.13 / `juhe5` 3.11.16 / `juhe6` 3.11.16 / `L` 3.10.21 |
+| 3 | 用 `uv pip install --no-deps -r <pip-freeze>` **逐包精确复现** | 5 个环境的包清单与原环境**逐包一致**（0 缺失 / 0 版本差异 / 0 多余） |
+| 4 | `juhe5` 单独装 GPU 版 torch | `torch==2.2.1+cu118`（`--index-url https://download.pytorch.org/whl/cu118`）+ `torchvision==0.17.1+cpu`（cpu index）；实测 `torch.cuda.is_available() == True` |
+| 5 | 手工包 `xtquant` 复制进重建后的 `dashixiong` / `juhe6`（90.7 MB，pip freeze 里没有、无 dist-info） | 两个环境 `import xtquant` 正常 |
+| 6 | 运行官方 `Uninstall-Anaconda3.exe /S` | `D:\ProgramsDev\anaconda3`（5.18 GB）→ 0；卸载器自动清了注册表卸载项与 PythonCore |
+| 7 | 清 conda 外壳与碎片 | `profile.ps1` 的 conda hook（整份文件）、cmd `AutoRun`、`~\.condarc`、`~\.conda\`、`%LOCALAPPDATA%\conda\`、开始菜单 `Anaconda (anaconda3)\` |
+| 8 | 删废弃环境 | `kuai`（空环境）、`juhe6 - 副本`、`.conda_envs_dir_test` |
+| 9 | PyCharm 解释器配置 | `%APPDATA%\JetBrains\PyCharm2023.3\options\jdk.table.xml`：6 个 `FLAVOR_ID=Conda` → 5 个 `VirtualEnv`（删掉指向 anaconda base 的 `Python 3.12` 条目），版本号同步为 3.10.21 / 3.11.16 / 3.12.13 |
+| 10 | **MCP 幽灵依赖解除（本仓库 config 已同步）** | `config\cordis.patch.yml` 里 jadx / ida 的 `command` 由裸 `uv` / `uvx` 改为绝对路径 `C:\Users\y\.local\bin\uv.exe` / `uvx.exe` |
+
+### 关键坑（踩过的）
+
+- **`uv pip install -r <pip-freeze>` 会因原环境的依赖冲突而失败**：旧 conda 环境是 pip 宽松解析的产物，
+  存在 `akshare` 要求 `pandas>=2.0` 却装了 `1.5.3`、`opencv-python` 要求 `numpy>=2` 却装了 `1.26.4` 这类矛盾。
+  **必须加 `--no-deps`** 才能逐包复现原状（`pip check` 报的 3 条冲突是原环境本来就有，不是重建引入的）。
+- **`pip freeze` 里的 `file://` 行要处理**：`torch` / `torchvision` 指向已删除的本地 whl（`@ file:///D:/dev/py/code/...`），
+  `XlsxWriter` 指向 conda 构建目录 `file:///C:/b/abs_...`。前者改为从 PyTorch 源装，后者改为 `XlsxWriter==3.2.3`。
+- **删 anaconda 前必须先有独立 uv**：本机旧 `uv` / `uvx` 的实体就在 `anaconda3\Scripts\`，先删 anaconda 等于删掉 uv。
+- **卸载器会被运行中的进程卡住**：DSH 的 MCP 会自动重启并用旧 PATH 再次拉起 `anaconda3\Scripts\uv.exe`，
+  导致卸载器删到 73 MB 后卡死。做法是**杀掉占用进程后立刻重删**（本次第 2 次尝试成功）。
+- **重建前保留旧环境**：旧环境先改名为 `<name>.conda-archive` 再原地建新环境，验证通过后才删。
+
+### 验证方法（新机器照做）
+
+```powershell
+# 1) uv 是独立的，且解析到 .local\bin
+where.exe uv; uv --version
+# 2) juhe5 的 GPU torch 可用（应打印版本号与 True）
+D:\dev\py\env\juhe5\Scripts\python.exe -c "import torch,torchvision,ultralytics;print(torch.__version__, torch.cuda.is_available())"
+# 3) 所有 .venv 仍可用（pyvenv.cfg 的 home 不应指向任何 anaconda 路径；无输出即正常）
+Get-ChildItem D:\AI_python -Recurse -Filter pyvenv.cfg -Depth 4 | Select-String 'anaconda'
+```
+
+### 未做 / 注意
+
+- 旧环境的完整 `pip freeze` / `conda list` / 配置快照留在 `D:\dev\py\_conda_migration_2026-09-29\`。
+- PyCharm 项目 `D:\dev\py\code\juhe5\.idea\misc.xml` 里还有一条失效的 `<option name="sdkName" value="juhe4" />`（历史残留，不影响使用）。
+- **MCP 的 `cordis.patch.yml` 改动需重启 DSH 才生效**；重启后 jadx / ida 会用独立 uv 拉起。

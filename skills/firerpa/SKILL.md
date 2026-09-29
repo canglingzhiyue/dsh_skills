@@ -20,7 +20,7 @@ description: Create FIRERPA / lamda Android automation scripts for Android apps 
 
 | # | 铁律 | 为什么 |
 |---|---|---|
-| 1 | **解释器一律用** `D:\AI_python\firerpa\.venv\Scripts\python.exe`（CPython 3.12.13 / `lamda==10.8`） | PATH 上的 `python`/`python3` 是 **Anaconda base，没有 `lamda`** → 用必 `ImportError` |
+| 1 | **解释器一律用** `D:\AI_python\firerpa\.venv\Scripts\python.exe`（CPython 3.12.13 / `lamda==10.8`） | PATH 上**没有可用的 `python`**（只剩 WindowsApps 的 0 字节 Store 存根；anaconda 已于 2026-09-30 移除）→ 用必 `ImportError` |
 | 2 | **先建端口通道，`--host` 一律 `localhost`**：`adb -s emulator-5562 forward tcp:65000 tcp:65000` | 模拟器 IP `172.16.1.4` 是 **NAT 网段，PC 直连不通**（实测 `TcpTestSucceeded=False`）。转发在模拟器/adb 重启后失效，连不上时**第一件事就是重跑它** |
 | 3 | **adb 一律用系统全路径** `D:\ProgramsDev\adb\adb.exe` | 雷电自带的 `D:\leidian\LDPlayer9\adb.exe` 会与它**抢 5037 端口互杀**（两个进程实测同时在跑） |
 
@@ -147,7 +147,7 @@ $py = 'D:\AI_python\firerpa\.venv\Scripts\python.exe'   # CPython 3.12.13（uv �
 ```
 
 - `lamda==10.8`（+ `frida 17.19.0` / `grpcio` / `cryptography` / `protobuf` 等，共 15 包，约 **160 MB**）
-- ⚠️ PATH 上的 `python` 是 Anaconda base，**没装 `lamda`** —— 始终用上面的绝对路径。
+- ⚠️ PATH 上**没有可用的 `python`**（只剩 WindowsApps 的 0 字节 Store 存根；anaconda 已于 2026-09-30 移除）—— 始终用上面的绝对路径。
 - 重建：
 
 ```powershell

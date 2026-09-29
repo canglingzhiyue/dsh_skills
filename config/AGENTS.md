@@ -108,7 +108,8 @@ Format and migration instructions: load the `skills-inventory` skill.
   Linux 脚本可以写，但本机不得以任何方式执行。
 - **Python 一律 uv**：项目内 `.venv` + `uv.lock`，默认清华源 `https://pypi.tuna.tsinghua.edu.cn/simple`，
   全局 `python-preference = "only-managed"`（用 uv 托管的 CPython，新环境先 `uv python install 3.12`）；
-  **永不**用 anaconda 的 python / pip 装任何东西。
+  uv 本体 = `C:\Users\y\.local\bin\uv.exe`（**独立安装**，2026-09-30 起 anaconda 已整机移除）；
+  本机 PATH 上**没有可用的 `python`**（只剩 WindowsApps 的 0 字节 Store 存根）——一律 `uv run` 或环境的绝对路径。
 - **每个开发阶段收尾清理无用文件**（限本项目目录内、走回收站），交付前再清一次；删完报告清单与释放空间。
 - **每个项目产出 `HANDOVER.md`**（项目根、中文）：环境 / 从零重建命令 / 运行与验证 / 目录结构 / 数据与凭据来源
   （只写从哪取）/ 已知坑 / 变更记录 / 回退方式 / 待办；**更新前先把旧版复制到

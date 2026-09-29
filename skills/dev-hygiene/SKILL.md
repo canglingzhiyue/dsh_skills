@@ -80,9 +80,9 @@ Add-Type -AssemblyName Microsoft.VisualBasic
 
 - 全局配置：`C:\Users\y\AppData\Roaming\uv\uv.toml`（本机已建，内容见 `references\uv-清华源.md`）：
   清华 index + `python-preference = "only-managed"`。**顶层键必须写在 `[[index]]` 之前**，写后面会静默失效。
-- **只用 uv 托管的 CPython**（本机 `cpython-3.12.13`，落在 `%APPDATA%\uv\python`）。新环境先
-  `uv python install 3.12` 再 `uv sync`；确认 uv 的 stderr 是 `Using CPython 3.12.13` 而**不是**
-  `D:\ProgramsDev\anaconda3\python.exe`。下载不通（GitHub 受限）时临时把那行改回 `managed`，
+- **只用 uv 托管的 CPython**（本机 `cpython-3.12.13`，装在 `%APPDATA%\uv\python`；本机已有 3.10.21 / 3.11.16 / 3.12.13 / 3.13.14）。新环境先
+  `uv python install 3.12` 再 `uv sync`；uv 的 stderr 应显示 `Using CPython <版本>`（2026-09-30 起 anaconda 已整机移除，不会再出现下面那行路径）
+  ~~`D:\ProgramsDev\anaconda3\python.exe`~~（该路径已不存在）。下载不通（GitHub 受限）时临时把那行改回 `managed`，
   并在该项目 `HANDOVER.md` 里写明原因。
 - **每个项目内也写一份**同样的 index 配置（`pyproject.toml` 或项目根 `uv.toml`），保证换机器 clone 下来零配置就快。
 - 新项目标准流程：
@@ -93,7 +93,7 @@ Add-Type -AssemblyName Microsoft.VisualBasic
   uv add <依赖>               # 走清华源
   uv run <脚本>               # 一律用 uv run 跑，不要手动 activate
   ```
-- **禁止**：用 anaconda 的 `python`/`pip`（`D:\ProgramsDev\anaconda3\`）装任何包；`pip install` 装到全局；`uv pip install --system`。anaconda 只当"宿主里恰好存在的 python"，不作为项目环境。
+- **禁止**：`pip install` 装到全局；`uv pip install --system`；依赖 PATH 上的裸 `python`（本机只剩 WindowsApps 的 0 字节 Store 存根，不可用）。uv 本体 = `C:\Users\y\.local\bin\uv.exe`（独立安装，不依赖任何 python 发行版）。**anaconda 已于 2026-09-30 整机卸载**（base + pkgs 缓存 + 注册表 + shell hook + 开始菜单全清），旧的「不得用 anaconda 装包」红线已无对象，留此条以记历史。
 - `uv.lock` **必须留在项目里**（可重现的前提）。`uv sync` 是重建环境的唯一标准命令。
 - 细节、配置片段与实测记录：`references\uv-清华源.md`；Python 打印中文乱码的坑见文末「本机已知坑」。
 

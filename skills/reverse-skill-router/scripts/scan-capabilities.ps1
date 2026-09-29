@@ -142,9 +142,9 @@ foreach ($s in $specs) {
         $cmd = Get-Command $s.c -ErrorAction SilentlyContinue | Select-Object -First 1
         if ($cmd) { $path = $cmd.Source; $via = 'PATH' }
     }
-    # anaconda 是本机 PATH 上 python/uv/uvx 的实际来源，但 dev-hygiene 禁止把它
+    # （历史）anaconda 曾是本机 PATH 上 python/uv/uvx 的实际来源；2026-09-30 已整机移除，
     # 当 python/pip 用。这里如实记录并告警，而不是隐藏——隐藏会让"MCP 依赖
-    # anaconda 里的 uv"变成幽灵依赖。
+    # anaconda 里的 uv"变成幽灵依赖。检测逻辑保留，用于识别新引入的同类污染。
     $risk = $null
     if ($path -and $path -match '\\anaconda') {
         $risk = 'anaconda：dev-hygiene 禁止当 python/pip 用；此处仅作事实记录'

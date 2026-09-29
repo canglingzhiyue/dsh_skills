@@ -14,6 +14,47 @@
 
 ---
 
+## 2026-09-30 — 本机彻底移除 Anaconda；MCP 幽灵依赖解除；5 个 conda 环境迁移为 uv 环境
+
+### 变更类型
+
+环境变更 + 文档修正（无 skill / plugin / preset 增删）
+
+### 内容
+
+- **Anaconda 整机移除**（用户要求）：base 5.18 GB + pkgs 缓存经官方 `Uninstall-Anaconda3.exe /S` 清除；
+  conda 外壳（`profile.ps1` hook、cmd `AutoRun`、`~\.condarc`、`~\.conda\`、`%LOCALAPPDATA%\conda\`、
+  开始菜单）、注册表 PythonCore、`kuai` 与 `juhe6 - 副本` 两个废弃环境一并清掉。
+- **uv 改为独立安装**：`C:\Users\y\.local\bin\uv.exe`（0.12.20），不再依赖 anaconda。已置于用户 PATH 最前。
+- **`D:\dev\py\env` 下 5 个 conda 环境原地重建为 uv 环境**（163 / dashixiong / juhe5 / juhe6 / L），
+  包清单与原环境逐包一致；juhe5 的 `torch==2.2.1+cu118` 实测 CUDA 可用。
+- **`config\cordis.patch.yml`：jadx / ida 两个 MCP 的 `command` 由 `uv` / `uvx` 改为绝对路径**
+  `C:\Users\y\.local\bin\uv.exe` / `uvx.exe` —— 这是**解除幽灵依赖的实质修复**：此前这两个 MCP 依赖
+  anaconda 目录里的 uv，anaconda 一动 MCP 就断。
+
+### 原因
+
+用户要求"卸载 anaconda、全局只用 uv，但不破坏正在使用的既有环境"。
+账本此前已如实记下这个幽灵依赖（见 `SKILLS.md` 2026-09-26 补记与
+`skills\apk-reverse\references\local-environment.md`），本次把它连同宿主一起解决。
+
+### 影响文件
+
+- `config\AGENTS.md` —— 红线"Python 一律 uv"改为记录 uv 绝对路径，并说明本机已无可用 `python`（只剩 Store 存根）。
+- `config\cordis.patch.yml` —— MCP `command` 改绝对路径（**必须重启 DSH 才生效**）。
+- `skills\apk-reverse\references\local-environment.md` —— 幽灵依赖一节改为"已修"。
+- `skills\dev-hygiene\SKILL.md`、`skills\dev-hygiene\references\uv-清华源.md` —— anaconda 相关禁令标注为历史（对象已不存在）。
+- `skills\firerpa\SKILL.md` —— 两处"PATH 上的 python 是 Anaconda base"改为"PATH 上已无可用 python"。
+- `skills\reverse-skill-router\scripts\scan-capabilities.ps1` —— 注释更新（探测逻辑保留，用于识别新引入的同类污染）。
+- `INSTALL.md` —— 新增一节「本机彻底移除 Anaconda，全局改用独立 uv」（含复现步骤与踩坑）。
+
+### 回退
+
+`git revert <this commit>` 可还原文档与配置；**anaconda 本体不可回退**（已走回收站）。
+若需回退到 conda 时代的某个环境：`D:\dev\py\_conda_migration_2026-09-29\envs\pip-freeze-*.txt` 有完整包清单，
+按 `INSTALL.md` 新增节的命令用 uv 重建即可。
+
+---
 ## 2026-09-30 — 新建「逆向模式」agent preset；账本新增第四类「agent preset」；apk-reverse 首次入库
 
 ### 变更类型

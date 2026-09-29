@@ -48,7 +48,7 @@ uv run python -c "import requests; print(requests.__version__)"
 
 ## 四、禁止事项
 
-- 用 `D:\ProgramsDev\anaconda3\python.exe` 或它的 `pip` 装任何包（本机默认 `python` 就指向它，会静默污染 anaconda）。
+- ~~用 `D:\ProgramsDev\anaconda3\python.exe` 或它的 `pip` 装任何包（本机默认 `python` 就指向它，会静默污染 anaconda）~~ —— **对象已不存在**：anaconda 于 2026-09-30 整机卸载，本机 PATH 上已无可用 `python`（只剩 WindowsApps 的 0 字节 Store 存根）。
 - `pip install`（全局）、`uv pip install --system`、`uv pip install` 装到非项目环境。
 - 在项目里手写 `requirements.txt` 代替 `pyproject.toml` + `uv.lock`（除非上游只发 requirements）。
 
@@ -75,6 +75,8 @@ Would install 1 package
 - 解析耗时 ~0.3 s。
 
 ## 六、托管 Python：`python-preference = "only-managed"`（2026-09-15 起）
+
+**（2026-09-30 更新）anaconda 已整机移除；下文的历史经过保留作为背景。**
 
 本机原先**没有任何 uv 托管的 Python**（`uv python list --only-installed` 只看到 anaconda 的 3.12.7），
 于是 `uv run` 建出的 `.venv` 虽然隔离了包安装，但**基础解释器仍是** `D:\ProgramsDev\anaconda3\python.exe`。
