@@ -102,8 +102,8 @@ Format and migration instructions: load the `skills-inventory` skill.
 
 ## 上下文保护 — 大输出走沙箱（context-mode，常驻规则）
 
-本机挂了 `context-mode` MCP（工具名 `mcp__context-mode__ctx_*`，另有自写插件 `ctx-router`
-在 DSH 的 `tools/pre-execute` 缝上兜底拦截，见 `plugins\dsh-ctx-router\RECIPE.md`）。
+本机挂了 `context-mode` MCP（工具名 `mcp__context-mode__ctx_*`，另有自写插件 `ctx-router` 在
+DSH 的 `tools/pre-execute` 缝上兜底拦截，见账本 `plugins\dsh-ctx-router\RECIPE.md`）。
 **凡是为了"从中得出结论"而读的数据，都不要直接读进上下文** —— 原始字节留在沙箱，只把结论拿回来。
 
 - 日志 / HTML / 大 JSON / CSV / 多文件统计 / 目录扫描 → `mcp__context-mode__ctx_execute`
@@ -117,17 +117,4 @@ Format and migration instructions: load the `skills-inventory` skill.
 
 判据一句话：**要"加工"的数据进沙箱；要"动手改"的东西才进上下文。**
 
-## 搜索与联网检索 —— 自动路由，用户不指定工具名（常驻规则，细则加载 `web-search-router` skill）
-
-联网检索/抓取由模型**自动**在多个搜索工具间路由，用户不用也不该说工具名（如 `donsetch_web_search`）：
-
-- **先判意图再选工具**：普通关键词搜索 → `web_search`（由 modsearch 插件接管，走 Firecrawl keyless）；
-  单页精读 → `read_page`（轻工具优先）；X 内容 → `x_search`；多引擎/技术向检索、整站爬取、绕反爬/JS 壳/PDF →
-  `donsetch_web_search` / `donsetch_web_crawl` / `donsetch_web_fetch`（donsetch_* 需重启 dsh web 后出现）。
-  轻工具明显不够（墙、JS 壳、PDF、要登录）→ 立即切 donsetch，不要反复失败。
-- **登录墙 SOP（硬性要求）**：命中 401/403、跳转登录、付费墙 → 用 donsetch 插件的内置二进制
-  （`~\.cache\donsetch\...\donsetch.exe`，本机**已卸载全局 CLI**）执行 `donsetch login <域名>`：
-  它会在用户桌面**弹出真实浏览器**，此时**停下明确告知用户去登录，等用户回复后再继续**；
-  登录后 cookie 自动入 vault，`donsetch_web_fetch` 对同域名自动携带登录态并重试。
-- 凭据只由用户在浏览器里输入，agent 不接触密码、不截图、不抓键盘；逆向/渗透目标走 `reverse-skill-router` 门禁。
 

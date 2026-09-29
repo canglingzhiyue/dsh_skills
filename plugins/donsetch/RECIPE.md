@@ -1,5 +1,8 @@
 # donsetch（donsetch-dsh）—— DSH 插件安装配方
 
+> **状态：已于 2026-09-28 卸载（用户评估后弃用）**。重新启用：`dsh plugin --profile web add github:dondai44423/donsetch-dsh`
+> 装回 profile，按下方「本机必做」配好代理池；二进制缓存会自动重建。本配方**仅作恢复参考**。
+
 | 项 | 值 |
 |---|---|
 | 类型 | **DSH 插件**（bundle，不是 skill） |
@@ -7,7 +10,7 @@
 | 来源（插件壳） | https://github.com/dondai44423/donsetch-dsh —— 安装 spec `github:dondai44423/donsetch-dsh` |
 | 来源（本体） | https://github.com/dondai44423/donsetch （Rust 单二进制，AGPL-3.0，发 npm `donsetch` + GitHub Releases） |
 | 本机安装日期 | 2026-09-28 |
-| 本机变更 | 2026-09-28 应**用户要求卸载了全局 CLI**（`npm uninstall -g donsetch`），CLI 型操作（doctor / login / keys）一律改用**插件下载的内置二进制**（`~\.cache\donsetch\dsh\bin\...\donsetch.exe`）；插件本身不受影响 |
+| 本机变更 | 2026-09-28 安装同日先应用户要求卸载全局 CLI；随后**用户弃用，当日整体卸载**：`dsh plugin --profile web remove @dsh-external/donsetch`，回收站清理 `~\.cache\donsetch`（38.9MB）+ `%LOCALAPPDATA%\donsetch`（48.3MB），daemon 进程已终止 |
 | 用途 | 给 DSH agent 提供**本地自研**的网页抓取 / 多引擎搜索 / 爬虫 / PDF OCR —— 零 API key、零账号，自带 Chrome 级 TLS 指纹与反机器人绕过；配合 `web-search-router` skill 自动路由 |
 
 ---

@@ -180,8 +180,9 @@ Write-Host @'
                             配方 / 拦截范围 / 逃生舱 / 验证见 plugins\dsh-ctx-router\RECIPE.md
                             注意：**不要**改用 @deepseek-ai/dsh-hooks-claude-code 桥接（其 inject 在本 profile
                             不满足 → cordis 永久等待、apply 永不执行，一个 hook 都不会注册）
-       donsetch 插件      : dsh plugin --profile web add github:dondai44423/donsetch-dsh
-                             + 可选全局 CLI npm install -g donsetch；配方见 plugins\donsetch\RECIPE.md
+       donsetch 插件      : 已按用户要求于 2026-09-28 卸载（弃用）。恢复机器时**不要安装**；
+                             仅当用户重新要求时：dsh plugin --profile web add github:dondai44423/donsetch-dsh
+                             （配方见 plugins\donsetch\RECIPE.md；装后需给 daemon 配代理池）
   2) 凭据（永不进仓库，必须手填）
        $DSH_HOME\.credentials.yaml —— DEEPSEEK_API_KEY / CLAUDEX_API_KEY / DS_1ZHE_API_KEY
   3) 登录态（永不进仓库）

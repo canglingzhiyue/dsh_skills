@@ -14,6 +14,39 @@
 
 ---
 
+## 2026-09-28 — 用户弃用 donsetch：整体卸载并还原全部改动
+
+### 变更类型
+
+卸载 + 还原（用户评估该工具"没什么大用"后要求移除并还原改过的 DSH 原生配置）。
+
+### 内容
+
+- **插件**：`dsh plugin --profile web remove @dsh-external/donsetch`（pnpm 470ms）→ `package.json` 的
+  `dependencies`/`bundles` 恢复 6+4 结构；`dsh --profile web --dump-config` exit 0 复核：
+  `dsh-think-zh` / `modsearch` / `dsh-pentest` / `dsh-ding` 四个插件与 `camoufox` / `jadx` / `ida` /
+  `context-mode` 四个 MCP 及 `ctx-router` 全部完好，`searchProvider: modsearch` 不变。
+- **还原原生配置**：`$DSH_HOME/AGENTS.md` 删除「搜索与联网检索 —— 自动路由」常驻段（web-search-router 规则一并撤出）；
+  `$DSH_HOME/skills/web-search-router/` 回收站（0.01MB）。
+- **清理足迹**：`~/.cache/donsetch`（38.86MB）、`%LOCALAPPDATA%\donsetch`（48.25MB）回收站；
+  daemon 进程（PID 34576，因守护占用缓存 exe 导致删除失败 → 先终止再删）；`%TEMP%` 的 package.json 备份已删。
+- **账本**：`plugins\donsetch\RECIPE.md` 顶部标注已卸载（保留作恢复参考）；`SKILLS.md` 表格行标注 + 三次补记；
+  `INSTALL.md` 的 donsetch 与 web-search-router 两节标注；`install.ps1` 待办标注"恢复机器时不要安装"；
+  `config\AGENTS.md` / `config\profile\package.json` 重新同步；账本 `skills\web-search-router\` 镜像删除（回收站）。
+
+### 原因
+
+用户实测后评估该工具（Cloudflare 交互式挑战解不了、搜索后端部分不可用）不值得保留；卸载同时要求还原
+DSH 原生配置且不得破坏 dsh —— 全程走官方卸载命令 + dump-config 复核 + 回收站删除，未动任何其它配置。
+
+### 影响
+
+- `plugins\donsetch\RECIPE.md` / `SKILLS.md` / `INSTALL.md` / `install.ps1` / `CHANGELOG.md`（本条目）
+- `config\AGENTS.md` / `config\profile\package.json`（还原后的当前实况）
+- 删除（回收站，可还原）：本机 donsetch 全部足迹 + 账本 `skills\web-search-router\` 镜像
+
+---
+
 ## 2026-09-28 — donsetch 验收通过：补齐 daemon 代理池 + 记录能力边界
 
 ### 变更类型

@@ -713,6 +713,9 @@ dsh plugin --profile web remove @howmp/dsh-pentest    # 然后重启 dsh
 ## donsetch（P2 独立类 · DSH 插件 · 网络来源）
 
 本体 = DonSeTch（Rust 单二进制，https://github.com/dondai44423/donsetch ，AGPL-3.0）：给 AI agent 用的
+> **状态：本机已于 2026-09-28 整体卸载（插件 + 缓存 + 配套 skill 全部回收站，可还原）。**
+> 本节与 `plugins\donsetch\RECIPE.md` 仅作恢复参考 —— 除非用户重新要求，新环境**不要安装**。
+
 网页抓取 / 搜索 / 爬虫 / PDF OCR，零 API key、零账号、全本地自研（Chrome 真实 TLS 指纹 + 自研 HTTP/2 +
 无头浏览器绕反爬 + 本地 ONNX 语义重排）。插件壳 = donsetch-dsh（https://github.com/dondai44423/donsetch-dsh），
 把本体注册为 DSH **进程内原生工具**（`donsetch_web_fetch` / `donsetch_web_search` / `donsetch_web_crawl` /
@@ -762,6 +765,9 @@ dsh plugin --profile web add github:dondai44423/donsetch-dsh
   本体键/代理/登录走内置二进制的 `keys` / `proxy` / `login`。
 
 ## web-search-router（P2 独立类 · 本地自制 skill）
+
+> **状态：2026-09-28 已随 donsetch 整体卸载**（本机 skill 目录与账本镜像均回收站，可还原）。
+> 本节仅作恢复参考 —— 若重新启用 donsetch，可还原该 skill 与 AGENTS.md 常驻段。
 
 **它是什么**：本机联网检索的**自动路由规则**。用户不说工具名（`donsetch_web_search` 之类），由模型按意图选工具：
 
