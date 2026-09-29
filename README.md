@@ -1,6 +1,6 @@
 # dsh_skills
 
-DSH 环境的**完整可迁移备份**（私有仓库）：skill、MCP、第三方插件、常驻规则与 DSH 配置。
+DSH 环境的**完整可迁移备份**（私有仓库）：skill、**agent preset**、MCP、第三方插件、常驻规则与 DSH 配置。
 每次本地有变更就提交推送一次 —— **git 历史取代了原先的按日 zip 快照**。
 
 **新环境只需要这个仓库地址：**
@@ -26,6 +26,7 @@ pwsh -File install.ps1             # 执行（会先备份现有配置）
 | `SKILLS.md` | **账本**：装过什么、优先级（P0/P1/P2）、来源、适配、记录日期。**只追加，绝不重写** |
 | `INSTALL.md` | **安装说明**：手工版的完整步骤，按优先级排列，含 MCP 一节 |
 | `plugins/` | DSH 插件**配方**（`RECIPE.md`：来源 + 安装命令 + 前置 + profile 片段 + 验证） |
+| `presets/` | **agent preset** 的整份副本（`<id>/`：`agent.cordis.yml` + `preset.yml` + `README.md`）—— preset 不在任何 profile 配置里，换机器只能靠这份副本迁移 |
 | `config/` | **环境配置**：`AGENTS.md`（常驻规则）、`settings.yaml`、`cordis.patch.yml`（**MCP 挂载**）、`profile/`（插件依赖与 pnpm 配置） |
 | `install.ps1` | **一键恢复脚本**：自动部分全做完，并打印必须人工完成的待办 |
 | `CHANGELOG.md` | **变更说明**：每次改了什么、为什么、影响哪些文件 |
@@ -38,6 +39,7 @@ pwsh -File install.ps1             # 执行（会先备份现有配置）
 前置检查（pwsh/git/node/pnpm/uv/dsh）
   → 备份现有配置到 $DSH_HOME\_restore_backup_<时间戳>
   → 恢复 skills/          → $DSH_HOME/skills/
+  → 恢复 presets/         → $DSH_HOME/.agent-presets/<id>/（agent preset；需 preset_probe validate 验证）
   → 恢复 config/AGENTS.md → $DSH_HOME/AGENTS.md（常驻规则）
   → 恢复 settings.yaml    → $DSH_HOME/
   → 恢复 MCP + profile    → $DSH_HOME/profiles/<profile>/
@@ -53,6 +55,7 @@ pwsh -File install.ps1             # 执行（会先备份现有配置）
 | 填凭据 | `.credentials.yaml` 里 3 个 API key，**永不进仓库** | 手工填 |
 | 登录态 | camoufox 的 `states/` `profiles/`，**永不进仓库** | 手工登录 |
 | JADX-GUI 及其插件 | 外部工具，不属本仓库范围 | 自行安装并保持开启 |
+| 生成 preset 依赖的清单 | 逆向模式的 persona 第一步要读 `$DSH_HOME\reverse\capabilities.md`，它是扫描器**生成物**（不入账本） | 跑 `pwsh -File "$D\skills\reverse-skill-router\scripts\scan-capabilities.ps1"` |
 | 改硬编码路径 | `cordis.patch.yml` 里的 `D:\AI_python\...`、`AGENTS.md` 里的账本路径、`settings.yaml` 里的 provider | 按新环境改 |
 | **重启 DSH** | 插件与 MCP 在启动时组合，不重启不生效 | 重启 |
 
@@ -70,6 +73,11 @@ $L = 'D:\AI_python\skills_backup'; $D = "$env:USERPROFILE\.dsh"
 
 # ① 同步 skill 内容
 robocopy "$D\skills" "$L\skills" /E /XD __pycache__ .git node_modules .venv /XF *.pyc /NFL /NDL /NJH /NJS /NP
+
+# ①b 同步 agent preset（整份副本；preset 不在 profile 配置里，漏同步 = 新环境没有这个模式）
+Get-ChildItem "$D\.agent-presets" -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+  robocopy $_.FullName "$L\presets\$($_.Name)" /MIR /XD __pycache__ .git /NFL /NDL /NJH /NJS /NP
+}
 
 # ② 同步环境配置
 Copy-Item "$D\AGENTS.md"                        "$L\config\AGENTS.md" -Force
