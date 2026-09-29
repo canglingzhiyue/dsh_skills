@@ -1023,9 +1023,115 @@ $Py = 'D:\AI_python\firerpa\.venv\Scripts\python.exe'
 
 ---
 
+## apk-reverse（P2 独立类 · skill · 网络来源 + 本机融合层）
+
+**安卓逆向的权威内核**：`SKILL.md`（47,958 B / 342 非空行）+ 44 篇 `references\` + 55 个 `scripts\`
+（`dexutil.py`、`repack.py`、`so_constpatch.py`、`patch_smali.py`、`vmp_diff_harness.py` …），
+116 文件 / 约 1.9 MB。**本机是权威副本** —— 上游 `zhaoxuya520/reverse-skill` 里也有个同名模块
+（12 文件 / 81 KB，口径相反：那份说"优先用本机已装的 jadx"，且被上游路由器指为 PRIMARY），
+**不要用那一份**。
+
+### 第 1 步：把 skill 放到位
+
+```powershell
+# 账本镜像已含本机融合层，整份复制即可
+robocopy "D:\AI_python\skills_backup\skills\apk-reverse" `
+         "$env:USERPROFILE\.dsh\skills\apk-reverse" /MIR /XD __pycache__ .git node_modules .venv
+```
+
+若改从上游重取（`https://github.com/newliver666/apk-reverse` 的 `skills/apk-reverse/`），
+**必须把镜像里的这两件自制件盖回去**，否则本机口径与已知缺陷记录全部丢失：
+
+- `references\local-environment.md` —— 本机实际工具 / MCP / 设备、"jadx 只是最后手段"这条上游口径在本机的修正、anaconda 幽灵依赖、中文路径坑；
+- `references\known-local-defects.md` —— 上游自认未修的两个活缺陷 + 从未跑通的路线；
+- `SKILL.md` 顶部的 `## This machine — local overlay` 一节（**自制件**，重取上游后要按镜像覆盖 `SKILL.md`）。
+
+### 第 2 步：它依赖的底座（都不随 skill 交付）
+
+| 依赖 | 本机现状 | 说明 |
+|---|---|---|
+| `jadx` / `ida` MCP | 在线 | 见本文 MCP 节；jadx 需 JADX-GUI + 8650 |
+| `apksigner` / `zipalign` / `aapt2` | build-tools 36.1.0 | Android SDK 自带 |
+| `adb` | `D:\ProgramsDev\adb\adb.exe` | **不要**用雷电自带的那份（抢 5037） |
+| `apktool` | **未装** | 重打包走 `scripts\repack.py`；要装先问用户 |
+| `frida` CLI + 设备侧 `frida-server` | **未装** | 动态调试前必须准备匹配版本 |
+| `droidasc` / `ddc`（上游首选索引器） | **未装** | 用 jadx MCP 替代 |
+| Dart AOT（`aotopsy` / `blutter`） | **未装** | 需要时另装 |
+
+### 第 3 步：验证
+
+```powershell
+# ① 能力清单里应出现 apk-reverse 与相关工具
+pwsh -NoProfile -File "$env:USERPROFILE\.dsh\skills\reverse-skill-router\scripts\scan-capabilities.ps1"
+# ② 会话 catalog 出现 apk-reverse（skill 层即时扫描，无需重启）
+# ③ 任何重建产物都要独立过这两条（不要采信脚本自己的"成功"结论）
+& 'D:\ProgramsDev\Android\SDK\build-tools\36.1.0\zipalign.exe' -c -p -v 4 <patched.apk>
+& 'D:\ProgramsDev\Android\SDK\build-tools\36.1.0\apksigner.bat' verify <patched.apk>
+```
+
+### 维护提醒
+
+- 上游 `evals\evals.json` 自述 `NOTHING IN THIS FILE HAS EVER BEEN EXECUTED`；packer / VMP /
+  tamper-suicide 路线**从未端到端跑通** —— 引用其结论必须标注强度。
+- 上游无 `LICENSE` 文件（frontmatter 却写 "see LICENSE at the repository root"）。
+- **备份额度**：`skills\apk-reverse\` 是完整内容（含本机融合层）；`evals\`、`evidence\` 也在内，
+  它们体积很小、且是"未验证面"的证据，不要删。
+
+---
+
+## reverse（逆向模式 · P2 独立类 · **agent preset**（第四类资产）· 本地自制）
+
+`presets\reverse\` 里是整份副本：`agent.cordis.yml`（17,521 B）+ `preset.yml`（270 B）。
+它是 DSH 自带 `standard` 骨架 + 逆向 persona，**没有注册任何服务或工具**，所以不需要 `isolate` realm。
+
+### 第 1 步：先装齐它引用的 5 个技能
+
+`reverse-skill-router`（路由与治理层 + 能力扫描器）、`apk-reverse`（Android）、
+`camoufox-reverse`（Web）、`wmpf-miniapp-reverse`（小程序）、`firerpa`（Android 动态执行臂）。
+
+### 第 2 步：整份复制到 preset 根
+
+```powershell
+New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.dsh\.agent-presets\reverse" | Out-Null
+Copy-Item "D:\AI_python\skills_backup\presets\reverse\*" `
+          "$env:USERPROFILE\.dsh\.agent-presets\reverse\" -Force
+```
+
+### 第 3 步：验证挂载
+
+用 `preset_probe` 工具 `action=validate id=reverse` → 期望 `mounted OK: reverse`。
+（它跑的是 DSH 真实挂载校验，等价于会话启动。注意：roster 的 `broken: false` **不是**验证。）
+
+### 第 4 步：生成能力清单（**必做**）
+
+persona 的第一步就是读 `$DSH_HOME\reverse\capabilities.md`；不生成它，那个文件不存在：
+
+```powershell
+pwsh -NoProfile -File "$env:USERPROFILE\.dsh\skills\reverse-skill-router\scripts\scan-capabilities.ps1"
+```
+
+### 第 5 步：实测
+
+新开一个会话、预设选「逆向模式」，确认：persona 生效（简体中文 + 默认已授权 + 开工五步 + 脚本分级）、
+工具列表与 `standard` 一致、`reverse-skill-router` 在 catalog 里。
+
+### 不要做
+
+- **不要**编辑 DSH 部署自带的 preset（`standard` / `ptc` / `minimal` / `cordis`）—— 升级会覆盖，
+  改坏 `cordis` 还会让 preset 创作能力失效。要改就改用户根下的这一份。
+- **不要**把本机工具路径写进 `agent.cordis.yml`：本机状态一律由能力清单提供（那正是"装了新工具不用改
+  preset"的原因）。新工具 → 重跑扫描器。
+
+### 维护提醒
+
+改完 `agent.cordis.yml`：① `preset_probe validate reverse`；② 重新整份复制回 `presets\reverse\`
+（并核对 SHA256）；③ 在 `SKILLS.md` 追加一行日志。`capabilities.md/json` 是**生成物**，不入账本。
+
+---
+
 ## MCP（P2 独立类 · 网络来源 + 本地运行时）
 
-本机在 `<profile>\cordis.patch.yml` 里挂了 **4 个 MCP server**。它们**不是 skill、也不是 npm 插件**，
+本机在 `<profile>\cordis.patch.yml` 里挂了 **3 个 MCP server**。它们**不是 skill、也不是 npm 插件**，
 而是一条 DSH 配置（`@deepseek-ai/dsh-mcp-client` 的 `insert` 条目）—— 但同样必须迁移，
 否则新环境会少掉这些工具。配置文件整份备份在 **`config\cordis.patch.yml`**。
 

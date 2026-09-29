@@ -1,6 +1,6 @@
 # Global DSH rules (user-global instructions, loaded in every session)
 
-## Skill inventory — for skills, DSH plugins and MCP mounts that are not DSH-bundled
+## Skill inventory — for skills, DSH plugins, MCP mounts and agent presets that are not DSH-bundled
 
 账本目录：`D:\AI_python\skills_backup` —— **它同时是一个私有 git 仓库**，
 remote = `https://github.com/canglingzhiyue/dsh_skills.git`。
@@ -14,20 +14,25 @@ remote = `https://github.com/canglingzhiyue/dsh_skills.git`。
   in place when a step is wrong.
 - `plugins\<name>\RECIPE.md` — a recorded plugin's recipe (spec + install command + prerequisites +
   profile snippets + verification); a self-written plugin also gets its source copied here.
+- `presets\<id>\` — a recorded **agent preset**, copied verbatim: `agent.cordis.yml` + `preset.yml`
+  + a `README.md` naming the skills it references. Restore = copy the directory back into
+  `$DSH_HOME\.agent-presets\<id>\`, then `preset_probe validate <id>`.
 - `config\` — environment config: `AGENTS.md` (these global rules), `settings.yaml`,
   `cordis.patch.yml` (**MCP mounts**), and `profile\` (`package.json` / `pnpm-workspace.yaml` / `cordis.yml`).
-- `install.ps1` — the one-shot restore script (skills + rules + settings + MCP + plugins).
+- `install.ps1` — the one-shot restore script (skills + presets + rules + settings + MCP + plugins).
 - `README.md` / `CHANGELOG.md` — repo guide / **change log** (what changed, why, which files).
 
 Rules:
 
 - **Scope: anything in this environment that is not DSH-bundled is recorded and backed up** — third-party
-  installs, things the user installed by hand, and things you installed for them. **Three kinds** qualify: a
+  installs, things the user installed by hand, and things you installed for them. **Four kinds** qualify: a
   **skill** (a directory under `$DSH_HOME/skills`), a **DSH plugin** (a non-`@deepseek-ai/*` entry in a
-  profile's `dependencies` or `dsh.profile.bundles`), and an **MCP mount** (a `@deepseek-ai/dsh-mcp-client`
-  `insert` entry in the profile's `cordis.patch.yml`). Never recorded or backed up: DSH's own bundles,
+  profile's `dependencies` or `dsh.profile.bundles`), an **MCP mount** (a `@deepseek-ai/dsh-mcp-client`
+  `insert` entry in the profile's `cordis.patch.yml`), and an **agent preset** (a directory under
+  `$DSH_HOME\.agent-presets\<id>\` — it is in **no** profile's `package.json`, so it does not migrate by
+  itself and would otherwise vanish on a new machine). Never recorded or backed up: DSH's own bundles,
   environment-provided tooling (npm/pnpm/node/corepack/uv/…), and ordinary npm packages that are not DSH
-  skills, plugins or MCP mounts. When unsure whether something counts as bundled, ask the user.
+  skills, plugins, MCP mounts or presets. When unsure whether something counts as bundled, ask the user.
 - One entry per requested install, **not** per directory: a repository shipping six skills is one entry,
   and the new environment reads the repository and handles the rest.
 - Record the source (repository URL / ClawHub name) plus the adaptation note when the source is not
@@ -53,6 +58,15 @@ Rules:
   prerequisite** (e.g. JADX-GUI with the `jadx-ai-mcp` plugin running), and how to verify it — remember
   `failOnStartupError: false` mounts fail **silently**. The runtime itself is rebuilt, never backed up.
   Details in the `skills-inventory` skill.
+- **An agent preset is recorded too — it lives outside every profile and would otherwise vanish**: it sits
+  only in `$DSH_HOME\.agent-presets\<id>\`, so a new machine that clones this repo and runs `install.ps1`
+  gets nothing unless the preset is backed up here. Back up the **whole preset directory** under
+  `presets\<id>\` (composition + metadata + a `README.md` naming the skills it references and the
+  generator scripts it depends on), restore by copying it back, and prove it with
+  `preset_probe validate <id>`. A preset **references** skills but provides none, so record the dependency
+  order in its row and install the referenced skills first. Never edit a preset that ships with the
+  deployment — a locally authored one under the user root is the only kind this covers. Details in the
+  `skills-inventory` skill.
 - **A skill that fronts a whole local environment is backed up self-contained**: when a recorded skill
   describes how to use an environment built on this machine (self-made helper scripts, client config, a
   heavyweight runtime of hundreds of MB to GBs), move the self-made pieces *into* the skill directory

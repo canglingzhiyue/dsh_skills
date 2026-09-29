@@ -1,4 +1,4 @@
-﻿#Requires -Version 5.1
+#Requires -Version 7.0
 <#
 .SYNOPSIS
   重建 reverse-skill 路由包（克隆 → 工具清单 → 路由自检 → 冒烟）。
@@ -10,7 +10,7 @@
   - **不运行** bootstrap-reverse.*（装工具必须先经用户同意）；
   - **永不运行** update-star-history.ps1（它会读本机 git 凭据并外发）。
 .EXAMPLE
-  powershell -NoProfile -ExecutionPolicy Bypass -File restore.ps1
+  pwsh -NoProfile -File restore.ps1
 .EXAMPLE
   $env:REVERSE_SKILL_PROXY='http://<proxy-host>:<port>'; .\restore.ps1
 .EXAMPLE
@@ -55,15 +55,15 @@ else {
 }
 
 Step '生成本机工具清单 tool-index.md'
-powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $RepoPath 'skills\scripts\refresh-tool-index.ps1')
+pwsh -NoProfile -File (Join-Path $RepoPath 'skills\scripts\refresh-tool-index.ps1')
 
 Step '路由自洽自检'
-powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $RepoPath 'skills\scripts\verify-routing-coherence.ps1')
+pwsh -NoProfile -File (Join-Path $RepoPath 'skills\scripts\verify-routing-coherence.ps1')
 
 Step '冒烟：master-route'
 $smokeOut = Join-Path $env:TEMP 'rs-smoke'
 New-Item -ItemType Directory -Force -Path $smokeOut | Out-Null
-powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $RepoPath 'skills\scripts\master-route.ps1') `
+pwsh -NoProfile -File (Join-Path $RepoPath 'skills\scripts\master-route.ps1') `
     -Hint 'offline apk reverse jadx' -OutDir $smokeOut
 
 Step ("完成：commit " + (git -C $RepoPath rev-parse --short HEAD))

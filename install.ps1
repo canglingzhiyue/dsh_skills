@@ -19,6 +19,7 @@ param(
   [string]$Profile = 'web',
   [switch]$DryRun,
   [switch]$SkipSkills,
+  [switch]$SkipPresets,
   [switch]$SkipConfig,
   [switch]$SkipPlugins
 )
@@ -106,6 +107,28 @@ if (-not $SkipSkills) {
     }
   }
 } else { Step 2 '恢复 skill —— 已跳过' }
+
+# ------------------------------------------------- 2b. agent preset（第四类资产）
+if (-not $SkipPresets) {
+  Step '2b' '恢复 agent preset → $DSH_HOME/.agent-presets/'
+  $psrc = Join-Path $Root 'presets'
+  if (-not (Test-Path $psrc)) { Warn '仓库里没有 presets/，跳过' }
+  else {
+    $ids = Get-ChildItem $psrc -Directory | Select-Object -ExpandProperty Name
+    Info "共 $($ids.Count) 个：$($ids -join '、')"
+    foreach ($id in $ids) {
+      $s = Join-Path $psrc $id
+      $d = Join-Path $DshHome ".agent-presets\$id"
+      if ($DryRun) { Info "将复制 preset $id → $d" ; continue }
+      New-Item -ItemType Directory -Force -Path $d | Out-Null
+      Copy-Item "$s\*" $d -Recurse -Force
+      Ok "preset $id（$((Get-ChildItem -Recurse $s -File).Count) 文件）"
+    }
+    Warn 'preset 只是 composition：它引用的 skill 必须先装好'
+    Warn '装完用 preset_probe validate <id> 验证挂载（roster 的 broken:false 不算验证）'
+    Warn '逆向模式的 persona 第一步要读 $DSH_HOME\reverse\capabilities.md —— 需跑一次 scan-capabilities.ps1 生成它'
+  }
+} else { Step '2b' '恢复 agent preset —— 已跳过' }
 
 # ---------------------------------------------------------------- 3. 常驻规则 + DSH 设置
 if (-not $SkipConfig) {

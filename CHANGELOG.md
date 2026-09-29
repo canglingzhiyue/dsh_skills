@@ -14,6 +14,83 @@
 
 ---
 
+## 2026-09-30 — 新建「逆向模式」agent preset；账本新增第四类「agent preset」；apk-reverse 首次入库
+
+### 变更类型
+
+新增（新 agent preset / 新 skill 首次记账 / **规则范围扩展**）+ 一处勘误（INSTALL.md 的 MCP 计数）
+
+### 内容
+
+**1. 新 agent preset `reverse`（会话里叫「逆向模式」）**
+
+旧的那个是**空壳**：`$DSH_HOME\.agent-presets\reverse\agent.cordis.yml` 逐行等于 DSH 自带的 `standard`，
+persona 仍是 "You are a coding agent"。已按用户要求**卸载（回收站，可还原）后重建**：
+`preset_probe copy standard → reverse` 拷骨架，只写**身份与硬规则**（默认已授权 / 开工五步 / 统一验收骨架 /
+脚本执行分级 / 增删自检 / 事实纪律）。`preset_probe validate reverse` → `mounted OK`。
+**能力不进 composition**：本机工具状态由生成物 `$DSH_HOME\reverse\capabilities.md` 提供，
+所以装了新工具**不需要改 preset**。
+
+**2. 账本新增第四类「agent preset」**
+
+preset 住在 `$DSH_HOME\.agent-presets\<id>\`，**不在任何 profile 的 `package.json` / `bundles` 里**
+—— 旧的三类（skill / DSH 插件 / MCP 挂载）既覆盖不到、换机器也不会自动回来，逆向模式会凭空消失。
+落地：新增 `presets\<id>\` 备份形态（composition + `preset.yml` + `README.md`）；
+`config\AGENTS.md` 的范围 bullet 改 "Four kinds" 并新增一条 preset 规则；`install.ps1` 增加 preset 恢复段；
+`INSTALL.md` 增加对应小节。仅记录用户本地自建的 preset；部署自带的与第三方包内的 preset 不记账。
+
+**3. `apk-reverse` 首次入库（此前完全在账本之外）**
+
+116 文件 / 1,897,362 B → `skills\apk-reverse\`。来源 `https://github.com/newliver666/apk-reverse`。
+**融合层两件自制件** `references\local-environment.md`、`references\known-local-defects.md`
+（后者记上游自认未修的两个活缺陷：`so_constpatch.py` 丢 zip `extra` 破坏 4 KB 对齐、
+`repack.py` 的 `^lib/[^/]+\.so$` 永远匹配不到 `lib/arm64-v8a/*.so`），`SKILL.md` 顶部加 local overlay
+并就地修正"jadx 是最后手段"这条与实况冲突的口径。
+
+**4. `reverse-skill-router` 重写为「路由与治理层」**
+
+旧版是"上游包说明书"，且有两处硬伤：description 自称"按**包内** RULES.md"（该文件不在技能目录里）、
+正文把 `powershell` 5.1 当标准调用（撞 `dev-hygiene` 红线）。新版 = 三个事实源（能力清单 / 域注册表 /
+上游素材库）+ 域路由表 + 授权登记模板（默认 `granted`）+ 案件目录规范 + 统一验收清单 + 脚本分级 +
+增删自检 + 上游素材库用法；新增机器可读的 `references\domain-registry.json`；
+`scripts\restore.ps1` 改 `pwsh` + `#Requires -Version 7.0`；新增 `scripts\scan-capabilities.ps1`
+（能力清单生成器 + 悬空引用检查）。
+
+**5. `firerpa` 归位为 Android 域的动态执行臂**（用户指出）
+
+它不是"外围自动化"：负责实机 UI 驱动、补丁后功能回归、必须让 App 自己跑起来才能观察的行为。
+`domain-registry.json` 新增 `supportRoles` 字段，扫描器输出该字段；路由技能里的错误定位已改正。
+
+**6. 勘误与留痕**
+
+- `INSTALL.md` MCP 节正文"挂了 **4 个** MCP server" → **3 个**（context-mode 已于 2026-09-29 卸载，
+  正文与实物不符已存在一段时间）。
+- `SKILLS.md` 表格多行仍写 `local/skill/<name>/`，而镜像实际在 `skills\<name>\`。按"只追加、不覆盖"
+  未改旧行，只在安装顺序区加一条勘误留痕；2026-09-30 起新增的行统一写 `skills\<name>\`。
+
+### 影响文件
+
+- 新增 `presets\reverse\{agent.cordis.yml,preset.yml,README.md}`
+- 新增 `skills\apk-reverse\`（116 文件，整份镜像）
+- 更新 `skills\reverse-skill-router\`（5 文件）、`skills\wmpf-miniapp-reverse\`（重新同步）
+- 更新 `SKILLS.md`（表格 2 行 + 安装顺序 2 条 + 日志 1 条）、`INSTALL.md`（新 2 节 + 1 处勘误）、
+  `config\AGENTS.md`（4 处）、`install.ps1`（preset 段 + `-SkipPresets`）、本文件
+- 更新 `skills\skills-inventory\SKILL.md`（**规则扩展同步到这一定义处**：范围三类→四类、仓库结构加
+  `presets\<id>\`、九条规矩与「什么时候动它」的清点项、表格列说明，并新增
+  「agent preset 怎么备份：整份 composition 副本」一节）
+
+### 验证
+
+- `preset_probe validate reverse` → `mounted OK: reverse`
+- 能力扫描器实跑 → `tools: 27 present / 7 missing | skills: 8 | mcp: 3 | devices: 1 | warnings: 7`，
+  悬空引用 0；并如实报出 **anaconda 幽灵依赖**（`python`/`uv`/`uvx` 实体都在 `anaconda3`，
+  而 jadx / ida 两个 MCP 依赖的正是它们）
+- 镜像核对：`skills\apk-reverse` 116f/1,897,362B、`skills\reverse-skill-router` 5f/52,802B、
+  `skills\wmpf-miniapp-reverse` 7f/39,275B（源与镜像字节一致）
+- `presets\reverse\` 两个文件 SHA256 与源一致
+
+---
+
 ## 2026-09-28 — 用户弃用 donsetch：整体卸载并还原全部改动
 
 ### 变更类型

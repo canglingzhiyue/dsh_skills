@@ -15,15 +15,20 @@ description: >
 remote = `https://github.com/canglingzhiyue/dsh_skills.git`。换机器时改这一行（见「账本目录怎么定」）。
 
 **范围：这套环境里凡是"不是 DSH 自带"的都算** —— 第三方来源装的、用户手动装的、你（AI）帮他装的，
-都要记、都要备份。**三类东西**分别处理：
+都要记、都要备份。**四类东西**分别处理：
 
 - **skill** —— `$DSH_HOME/skills` 下的一个目录；
 - **DSH 插件** —— 某个 profile 的 `dependencies` / `dsh.profile.bundles` 里**非 `@deepseek-ai/*`** 的条目；
 - **MCP server 挂载** —— profile 的 `cordis.patch.yml` 里 `@deepseek-ai/dsh-mcp-client` 的 `insert` 条目
   （它既不是 skill 也不是 npm 插件，但同样是"这台机器的资产"，不记就迁移不走）。
+- **agent preset** —— `$DSH_HOME\.agent-presets\<id>\` 下的一个目录（**用户自己写的**那些）。
+  它**不在任何 profile 的 `package.json` / `bundles` 里**，所以换机器会**凭空消失** —— 备份形态是
+  `presets\<id>\` 下的整份 composition 副本（见「agent preset 怎么备份」一节）。
+  **部署自带的 preset**（`standard` / `ptc` / `minimal` / `cordis`）与**第三方包内的 preset**
+  （如 `@howmp/dsh-pentest` 的 `pentest`）都不算、不记、不备份。
 
 **不记、不备份**：DSH 自带的那批 bundle、环境预装的工具（npm / pnpm / node / corepack / uv …）、
-以及根本不是 DSH skill / 插件 / MCP 的普通 npm 包。**拿不准某样东西算不算"自带" → 问用户，不要擅自记或擅自排除。**
+以及根本不是 DSH skill / 插件 / MCP / preset 的普通 npm 包。**拿不准某样东西算不算"自带" → 问用户，不要擅自记或擅自排除。**
 
 ## 仓库结构
 
@@ -33,15 +38,16 @@ remote = `https://github.com/canglingzhiyue/dsh_skills.git`。换机器时改这
 | `SKILLS.md` | **账本**：装过什么、优先级、来源、适配。**只追加，绝不重写**（表格结构变更例外，须在日志说明） |
 | `INSTALL.md` | **安装说明**：新环境照着它**按优先级顺序**一节一节装。它是"当前说明"，有错就当场改对（不保旧版） |
 | `plugins\<name>\RECIPE.md` | 已记账插件的**配方**；插件若是自己写的，连源码一起放这里 |
+| `presets\<id>\` | 已记账 **agent preset** 的**整份副本**：`agent.cordis.yml` + `preset.yml` + `README.md`（见「agent preset 怎么备份」一节） |
 | `config\` | **环境配置**：`AGENTS.md`（常驻规则）、`settings.yaml`、`cordis.patch.yml`（MCP 挂载）、`profile\`（`package.json` / `pnpm-workspace.yaml` / `cordis.yml`） |
-| `install.ps1` | **一键恢复脚本**：skill + 常驻规则 + DSH 设置 + MCP 挂载 + profile 配置 + 插件安装 |
+| `install.ps1` | **一键恢复脚本**：skill + agent preset + 常驻规则 + DSH 设置 + MCP 挂载 + profile 配置 + 插件安装 |
 | `README.md` / `CHANGELOG.md` | 仓库说明 / **变更说明**（每次改了什么、为什么、影响哪些文件） |
 | `archive\` | 历史归档（如 `AGENTS.md` 的旧版本） |
 
 ## 九条规矩
 
-1. **范围：非 DSH 自带就纳入**（见开头那段，**三类**）。第三方装的、用户手动装的、你帮装的，都记；
-   DSH 自带 bundle、环境预装工具、普通 npm 包不记。分不清就问用户。
+1. **范围：非 DSH 自带就纳入**（见开头那段，**四类**）。第三方装的、用户手动装的、你帮装的，都记；
+   DSH 自带 bundle、环境预装工具、普通 npm 包、部署自带的 preset 不记。分不清就问用户。
 2. **一次安装记一条，不是每个目录一条。** 仓库里打包了多个 skill（例如 ponytail 带 6 个）
    也只记一条，拆包的事由新环境的 DSH 读仓库后自行处理。
 3. **账本只追加，不覆盖。** 新行加到表格末尾、新日志加到文件末尾；已有行不改不删，要更正就再追加一行说明。
@@ -158,6 +164,40 @@ MCP server 既不是 skill 也不是 npm 插件 —— 它是一条**普通的 D
 5. **验证**：重启 DSH 后，会话里应出现 `mcp__<serverName>__*` 工具；`--dump-config` 里应出现该条目。
    `failOnStartupError: false` 的条目（如 jadx）**启动失败不会报错**，所以要主动验证。
 6. **必须重启 DSH**：MCP 在 profile 启动时组合，不重启不生效。
+
+## agent preset 怎么备份：整份 composition 副本，不是配方
+
+**第四类资产**。它住在 `$DSH_HOME\.agent-presets\<id>\`，**不在任何 profile 的 `package.json` / `bundles` 里**
+—— skill 镜像、插件配方、MCP 挂载三种办法都覆盖不到它，新环境克隆本仓库再跑 `install.ps1`
+也拿不回它，**模式会凭空消失**。
+
+备份形态 = `presets\<id>\` 下的**整份副本**：
+
+| 文件 | 说明 |
+|---|---|
+| `agent.cordis.yml` | composition 本体（整份复制，不裁剪、不改写） |
+| `preset.yml` | 显示名与描述（会话选择器里显示的就是它；没有它 picker 里只显示目录名） |
+| `README.md` | **必写**：这是什么、依赖哪些 skill（按什么顺序）、有没有必须先跑的生成物、怎么验证挂载、不要做什么 |
+
+恢复 = 把目录复制回 `$DSH_HOME\.agent-presets\<id>\`，然后：
+
+1. `preset_probe validate <id>` → 期望 `mounted OK`。
+   **roster 里的 `broken: false` 不算验证** —— 它只做形状检查（YAML 能解析、有具名行），
+   行引用的包不存在、配置非法、行没激活、服务发布到根 realm 这四种失败它都照过；
+2. 若该 preset 依赖**生成物**（例如逆向模式的能力清单 `$DSH_HOME\reverse\capabilities.md`），
+   先跑它的生成脚本，否则 persona 指向的文件不存在；
+3. 新开一个会话选该 preset，确认 persona 与工具列表符合预期（只有真实会话能看出 composition 产出的 agent）。
+
+**规则**：
+
+- preset **引用** skill、但自己不提供能力 —— 它的行必须写清依赖顺序（先装引用的 skill），
+  `README.md` 里再重复一遍；
+- **绝不备份 DSH 部署自带的 preset**（`standard` / `ptc` / `minimal` / `cordis`）与第三方包内的 preset
+  （如 `@howmp/dsh-pentest` 的 `pentest`）：前者归部署所有、升级会覆盖，改坏 `cordis` 还会让 preset
+  创作能力失效；后者随插件重装即回来；
+- 只记**用户自己写在 `.agent-presets\` 下的** preset；
+- 改了 composition 必须重新整份复制回 `presets\<id>\`（并核 SHA256）—— 这是"已记账条目修改后
+  重新同步一趟"的一个实例。
 
 ## 配套环境型 skill：自制件进目录，有来源的只记配方
 
@@ -286,15 +326,18 @@ git push
 用户要求安装、更新、修改或删除之后：
 
 1. `read` 打开 `<账本目录>\SKILLS.md` 和 `INSTALL.md`。
-2. **顺手清点一次**（避免漏掉用户自己装的）—— 现在要扫**三类**：
+2. **顺手清点一次**（避免漏掉用户自己装的）—— 现在要扫**四类**：
    - skill = `$DSH_HOME/skills` 下的目录；
    - 插件 = `<profile>\package.json` 的 `dependencies` 里**非 `@deepseek-ai/*`** 的条目，
      以及 `dsh.profile.bundles` 里非自带的那些；
-   - **MCP = `<profile>\cordis.patch.yml` 里 `name: '@deepseek-ai/dsh-mcp-client'` 的 `insert` 条目**。
+   - **MCP = `<profile>\cordis.patch.yml` 里 `name: '@deepseek-ai/dsh-mcp-client'` 的 `insert` 条目**；
+   - **agent preset = `$DSH_HOME\.agent-presets\` 下的目录**（凡是用户自己写在那里的，
+     都不在任何 profile 配置里 —— 漏记就等于新环境没有这个模式）。
    发现没记账的（用户手动装的、第三方装的）→ 一并补记；分不清是否自带的 → 问用户。
-3. 判定优先级（P0/P1/P2），确认它是否改变安装顺序。
+3. 判定优先级（P0/P1/P2），确认它是否改变安装顺序。**preset 引用 skill 而不提供能力**：
+   它的优先级按"消费者"记，并在行里写清必须先装哪些 skill。
 4. 记账：账本追加一行表格（含优先级）+ 一行日志，`INSTALL.md` 追加一节（或更新 `install.ps1`）；
-   插件无论有无来源都要写 `RECIPE.md`。
+   插件无论有无来源都要写 `RECIPE.md`；preset 备份整份目录到 `presets\<id>\` 并写 `README.md`。
 5. **同步 + 提交推送**（见「变更即提交」），并在 `CHANGELOG.md` 追加一条变更说明。
 6. 文件在工作区之外时可能被沙箱拒绝：**同一次操作重试一次**并申请 `danger-full-access`，
    理由写"更新工作区外的 skill 清单"。
@@ -303,10 +346,10 @@ git push
 
 | 列 | 内容 |
 |---|---|
-| 名称 | 用户口中或来源里的名字（仓库名即可）；**是插件就标注「DSH 插件」**，是 MCP 就标注「MCP」，是 skill 可不标 |
+| 名称 | 用户口中或来源里的名字（仓库名即可）；**是插件就标注「DSH 插件」**，是 MCP 就标注「MCP」，是 **agent preset 就标注「agent preset」**（并写上会话选择器里的显示名），是 skill 可不标 |
 | 优先级 | `P0 治理类` / `P1 依赖类` / `P2 独立类`（判定见上） |
 | 来源 | GitHub 仓库 URL、ClawHub 名称；**没来源写 `本地自制（唯一副本在 skills/<name>/）`**；推不出来写 `未知（本地）`，**绝不编造**。**MCP 这一列写它依赖的运行时**（如 `camoufox MCP ← D:\AI_python\camoufox`） |
-| 适配 | 来源不是 DSH 原生格式时必写：`需按 DSH 模式定制修改 —— SKILL.md frontmatter 只留 name/description（≤500 字符）、命令说明改用 /name 调用、子代理规则写进 subagent prompt`；本身就是 DSH skill 则写 `DSH 原生，复制 skills/<name>/ 即可`；**插件写安装命令与前置，并指向 `plugins\<name>\RECIPE.md`**；**MCP 写它的 `serverName` 与在 `config\cordis.patch.yml` 里的条目、外部前置、验证方式** |
+| 适配 | 来源不是 DSH 原生格式时必写：`需按 DSH 模式定制修改 —— SKILL.md frontmatter 只留 name/description（≤500 字符）、命令说明改用 /name 调用、子代理规则写进 subagent prompt`；本身就是 DSH skill 则写 `DSH 原生，复制 skills/<name>/ 即可`；**插件写安装命令与前置，并指向 `plugins\<name>\RECIPE.md`**；**MCP 写它的 `serverName` 与在 `config\cordis.patch.yml` 里的条目、外部前置、验证方式**；**preset 写它依赖哪些 skill（按顺序）、有没有必须先跑的生成物脚本、验证命令，并指向 `presets\<id>\README.md`** |
 | 记录日期 | `YYYY-MM-DD` |
 
 日志一行说清这次做了什么：装/改了哪个来源、带了几个 skill / 插件 / MCP、同步了哪些目录、优先级变化、删掉了什么。

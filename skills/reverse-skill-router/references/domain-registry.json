@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "updated": "2026-09-30",
+  "note": "逆向模式的域注册表：域 → 主技能 / 支撑技能 / 深度 / 验收附加项。scan-capabilities.ps1 读它做悬空引用检查；新增或卸载技能后请同步这里。depth 的语义：deep = 本机有实测过的主技能；shallow = 只有未验证的参考资料；absent = 无任何落点。",
+  "domains": [
+    {
+      "id": "miniapp",
+      "label": "微信小程序",
+      "depth": "deep",
+      "primarySkills": ["wmpf-miniapp-reverse"],
+      "supportingSkills": ["reverse-skill-router"],
+      "entryHint": "WMPFDebugger（D:\\AI_python\\reverse\\vmpfdebugger）Frida 注入 WeChatAppEx + CDP 代理 62000，三步顺序敏感：先调试器 → 重开小程序 → 最后 DevTools。不覆盖 .wxapkg 离线解包。",
+      "acceptance": ["CDP 可复现", "四行日志验证点（[miniapp] miniapp client connected 先出现）"]
+    },
+    {
+      "id": "web",
+      "label": "Web / 前端 JS",
+      "depth": "deep",
+      "primarySkills": ["camoufox-reverse"],
+      "supportingSkills": ["reverse-skill-router"],
+      "entryHint": "camoufox MCP（39 工具，launch_browser 起）做反指纹浏览、Hook、JSVMP/签名参数定位；先取证复现再谈 AST 清洗。",
+      "acceptance": ["签名/加密参数可本地复现", "请求可重放成功"]
+    },
+    {
+      "id": "android",
+      "label": "Android / APK",
+      "depth": "deep",
+      "primarySkills": ["apk-reverse"],
+      "supportingSkills": ["firerpa", "reverse-skill-router"],
+      "entryHint": "权威内核为 skills\\apk-reverse（114 文件）；动态执行臂是 firerpa。本机有 jadx MCP（需 JADX-GUI + 8650 在线）与 IDA 9.4 MCP，先读 capabilities.md 与 apk-reverse\\references\\local-environment.md 再动手。",
+      "supportRoles": {
+        "firerpa": "动态执行臂（属于逆向，不是外围自动化）：真机/模拟器上的 UI 驱动、批量点击走流程、补丁后的功能回归验证、以及需要「让 App 自己跑起来」才能观察的行为。脚本必须落纯 ASCII 路径（中文路径会让 import lamda 崩 UnicodeEncodeError）；先 adb -s <serial> forward tcp:65000 tcp:65000 再 --host localhost；adb 一律用 D:\\ProgramsDev\\adb\\adb.exe"
+      },
+      "acceptance": ["apk-reverse 的 done 六条", "patch-audit 双层（Tier1 长度扫描 + Tier2 逐 opcode）", "control build 对照", "动态回归：firerpa 在真实设备上跑通目标流程且相邻功能仍可用"]
+    },
+    {
+      "id": "ios",
+      "label": "iOS",
+      "depth": "shallow",
+      "primarySkills": [],
+      "supportingSkills": [],
+      "entryHint": "本机无 iOS 主技能，也没有 ipa/otool/class-dump 工具链。",
+      "fallback": "参考（未在本机验证）：C:\\Users\\y\\.dsh\\reverse-skill\\skills\\mobile-reverse\\references\\ios-reverse-guide.md。使用前必须标注「未验证」，并先建能力清单条目。",
+      "acceptance": []
+    },
+    {
+      "id": "windows",
+      "label": "Windows / PE / .NET",
+      "depth": "shallow",
+      "primarySkills": [],
+      "supportingSkills": [],
+      "entryHint": "本机无 x64dbg / dnSpy / Ghidra / radare2；二进制侧可用 IDA 9.4 + idalib MCP。",
+      "fallback": "参考（未在本机验证）：C:\\Users\\y\\.dsh\\reverse-skill\\skills\\dotnet-reverse（28.6 KB）与 skills\\reverse-engineering\\references\\anti-analysis.md（32.4 KB，含 Windows PEB / 反 DBI 专节）。工具缺口先由 IDA MCP 补。",
+      "acceptance": []
+    }
+  ]
+}
