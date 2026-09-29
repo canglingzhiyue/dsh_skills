@@ -647,3 +647,37 @@ hooks.json 语法；matcher 写法；profile 差异（新建隔离 profile `hook
   跑 `python.exe`、`Get-Process` 查进程），但当时**无法证明是否误拦**。
 - 日志已改为记录 `why=`（命中规则）、`arglen=`（命令总长）、`arg=`（前 400 字符）；
   `routeReason` 返回 `{reason, why}`。**该加强需重启后生效**（首版拦截功能本身正常）。
+
+---
+
+## 2026-09-29 — 用户弃用 context-mode：整体卸载并还原 DSH 原生配置
+
+**背景**：用户实测后判断该工具"用处也不大"，要求**整体卸载**（MCP + 插件 + 本地数据）
+并还原我改过的 DSH 原生配置，明确强调**不要破坏 dsh**。
+
+### 卸载（顺序是关键：先改配置、后删文件）
+
+若先删 `plugins\dsh-ctx-router\` 而配置仍挂着它，热重载会 `ERR_MODULE_NOT_FOUND`。实际顺序：
+
+1. 备份 profile 的 `cordis.patch.yml` → `%TEMP%\cordis.patch.yml.bak-20260929-083027`
+   （7239 B，SHA256 `8DE98535…`）；
+2. 删 `mcp-context-mode` 与 `ctx-router` 两个 `insert` 条目；
+3. `dsh --profile web --dump-config` → **exit 0、627 行、零错误**，只剩 camoufox / jadx / ida；
+4. 删 `$DSH_HOME\AGENTS.md` 的「上下文保护 — 大输出走沙箱（context-mode）」整节；
+5. `npm uninstall -g context-mode` → **removed 140 packages**（包目录与两个 shim 均消失）；
+6. `$DSH_HOME\plugins\dsh-ctx-router\`（0.01 MB）与 `$DSH_HOME\context-mode\`（2.13 MB）走回收站。
+
+### 账本
+
+- `config\cordis.patch.yml`、`config\AGENTS.md` 重新同步为还原后实况
+- `plugins\dsh-ctx-router\` 与 `plugins\context-mode-dsh-hook\` 两个自制件目录移入回收站
+  （git 历史可恢复：`git checkout c3eab63 -- plugins/`）
+- `INSTALL.md`：删 MCP 表格行；该节改写为"已卸载，新环境不要安装"
+- `install.ps1`：该条待办改写为"不要安装"
+- `SKILLS.md`：表格行按 append-only 规则**保留**，另追加卸载日志
+
+### 顺带验证
+
+卸载过程中我自己的一条 `Select-String` 命令**被 ctx-router 拦下**（`（命中：全文检索）`），
+用 `ctx-allow` 逃生舱绕过 —— 证明插件在被卸载前仍在正常工作。全程两次 `dump-config`
+（卸载前含两条目、卸载后 627 行）**均 exit 0**，DSH 未受影响。

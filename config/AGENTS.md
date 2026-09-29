@@ -100,21 +100,6 @@ Format and migration instructions: load the `skills-inventory` skill.
   （只写从哪取）/ 已知坑 / 变更记录 / 回退方式 / 待办；**更新前先把旧版复制到
   `docs\handover-history\HANDOVER-YYYY-MM-DD.md`**；项目完事且重建命令已验证时可删 `.venv`（先问一次）。
 
-## 上下文保护 — 大输出走沙箱（context-mode，常驻规则）
 
-本机挂了 `context-mode` MCP（工具名 `mcp__context-mode__ctx_*`，另有自写插件 `ctx-router` 在
-DSH 的 `tools/pre-execute` 缝上兜底拦截，见账本 `plugins\dsh-ctx-router\RECIPE.md`）。
-**凡是为了"从中得出结论"而读的数据，都不要直接读进上下文** —— 原始字节留在沙箱，只把结论拿回来。
-
-- 日志 / HTML / 大 JSON / CSV / 多文件统计 / 目录扫描 → `mcp__context-mode__ctx_execute`
-  （写代码算，只 `console.log` 结论）或 `ctx_execute_file`
-- 多命令调研（git log、多处搜索、多个接口）→ `mcp__context-mode__ctx_batch_execute`，`queries` 里一次问全
-- 抓网页 → `mcp__context-mode__ctx_fetch_and_index`（原始页面不进上下文，之后用 `ctx_search` 回查）
-- 先索引再按主题回查 → `ctx_index` / `ctx_search`；想看省了多少 → `ctx_stats`
-
-**仍然直接用原生工具**：要用 `edit` 改的文件（需要精确原文）、短且固定的输出（`pwd`、`git status`）、
-改变状态的操作（写文件、跑构建、建目录），以及用户明确要看原文的少量内容。
-
-判据一句话：**要"加工"的数据进沙箱；要"动手改"的东西才进上下文。**
 
 

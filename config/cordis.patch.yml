@@ -79,55 +79,6 @@
           PYTHONIOENCODING: 'utf-8'
         toolCallTimeoutMs: 600000
 
-# ---------------------------------------------------------------------------
-# Context Mode —— 上下文窗口优化 MCP（mksglu/context-mode，npm 包 context-mode，Elastic-2.0）
-# 上游：https://github.com/mksglu/context-mode
-# 作用：大块工具输出不进上下文 —— 在沙箱子进程里跑代码 / 抓网页 / 建 FTS5 索引，
-#       只把结论回传（官方称省 98%）；另带 SQLite 会话记忆，压缩后接着干。
-# 安装：npm install -g context-mode（全局落在 D:\ProgramsDev\nodejs\node_modules\context-mode）
-# 启动：node + cli.bundle.mjs（不带参数即 stdio MCP server）；不用 .cmd shim，
-#       免得 Windows 下 spawn 需要 shell。
-# DSH 不在官方 17 个平台清单内：11 个 ctx_* MCP 工具全部可用，
-#       但没有 hook 层强制路由（官方 hooks 只认 Claude Code / Cursor / Copilot / Codex 等）。
-# CONTEXT_MODE_DIR 显式指定：否则它按 ~/.openclaw 目录存在把平台误判成 OpenClaw，
-#       存储会落到 C:\Users\y\.openclaw\context-mode。
-# 工具在会话里以 mcp__context-mode__<tool> 暴露，例如 mcp__context-mode__ctx_execute
-# ---------------------------------------------------------------------------
-- insert:
-    - id: mcp-context-mode
-      name: '@deepseek-ai/dsh-mcp-client'
-      config:
-        serverName: context-mode
-        transport: stdio
-        command: 'D:\ProgramsDev\nodejs\node.exe'
-        args:
-          - 'D:\ProgramsDev\nodejs\node_modules\context-mode\cli.bundle.mjs'
-        env:
-          CONTEXT_MODE_DIR: 'C:\Users\y\.dsh\context-mode'
-        toolCallTimeoutMs: 300000
 
-# ---------------------------------------------------------------------------
-# ctx-router —— 自写原生 DSH 插件：大输出自动改走 context-mode 沙箱
-# 背景：context-mode 官方的 PreToolUse hook 用一张**写死的**平台工具名别名表识别工具
-#   （只认 Claude Code 的 Bash / Read / Grep …），DSH 的工具叫 pwsh / read / grep，
-#   表里没有、也没有配置扩展点 → 官方 hook 在 DSH 里收到工具名会直接放行，等于没装。
-# 做法：挂 DSH 自己的拦截缝 `tools/pre-execute`（waterfall，返回 {kind:'deny',reason}
-#   即拦下，reason 会作为 Error 回给模型）。
-#   **不要改用 @deepseek-ai/dsh-hooks-claude-code**：它 inject 的 shell/sessionProjections
-#   在本 profile 里不满足，cordis 会让它一直等待、apply 永不执行，于是 hook 一个都不注册；
-#   实测（会话日志 0 条 hook 事件 + SessionStart 不触发）确认这条路在本版本走不通。
-#   源码（唯一副本，账本另有备份）：
-#     C:\Users\y\.dsh\plugins\dsh-ctx-router\lib\index.js
-#   拦截范围：pwsh/bash 命令里的 curl/wget/iwr/irm/Invoke-WebRequest/Invoke-RestMethod、
-#   Get-Content -Raw、cat/type、rg/Select-String/findstr、docker|kubectl logs/journalctl、
-#   无 -n|--max-count 的 git log、无 --stat 的 git diff、find/Get-ChildItem -Recurse，
-#   以及不带 limit/offset 读 > 256 KB 的文件；deny 时给出 ctx_* 替代用法。
-#   逃生舱：命令里含 `ctx-allow`，或 read 显式带 limit/offset → 放行（不会死锁）。
-#   插件内部 fail-open：任何意外都放行，绝不阻断会话。
-#   每次拦截往 C:\Users\y\.dsh\context-mode\ctx-router.log 记一行。
-# 注意：这是**自制件**，context-mode 升级不受影响（没改它的源码）；
-#   但若官方调整了工具名或路由语义，本插件需复核。
-# ---------------------------------------------------------------------------
-- insert:
-    - id: ctx-router
-      name: 'file:///C:/Users/y/.dsh/plugins/dsh-ctx-router/lib/index.js'
+
+

@@ -170,16 +170,12 @@ Write-Host @'
                             uvx ida-hcli plugin install 'ida-mcp@https://github.com/hexrayssa/ida-mcp'
                             报 PEP 668 / not a virtual environment 时先跑：uvx ida-hcli ida python create-environment
                             （hcli 不读 git 代理，需自行给 HTTP_PROXY/HTTPS_PROXY）
-       context-mode MCP   : 全局 npm 包装一次即可 —— npm install -g context-mode（前置 Node >= 22.5）
-                            （挂载命令指向 <npm 全局根>\context-mode\cli.bundle.mjs；全局根不是
-                             D:\ProgramsDev\nodejs 时，改 config\cordis.patch.yml 该条的 command/args）
-                            另需**自制原生插件 ctx-router**（自动路由，挂在 DSH 自己的 tools/pre-execute 缝上）：
-                            New-Item -ItemType Directory -Force $HOME\.dsh\plugins\dsh-ctx-router\lib | Out-Null
-                            Copy-Item plugins\dsh-ctx-router\lib\index.js  $HOME\.dsh\plugins\dsh-ctx-router\lib\ -Force
-                            Copy-Item plugins\dsh-ctx-router\package.json  $HOME\.dsh\plugins\dsh-ctx-router\ -Force
-                            配方 / 拦截范围 / 逃生舱 / 验证见 plugins\dsh-ctx-router\RECIPE.md
-                            注意：**不要**改用 @deepseek-ai/dsh-hooks-claude-code 桥接（其 inject 在本 profile
-                            不满足 → cordis 永久等待、apply 永不执行，一个 hook 都不会注册）
+       context-mode MCP   : 已按用户要求于 2026-09-29 整体卸载（弃用）。恢复机器时**不要安装**；
+                            它当初是为了省上下文（沙箱跑代码只回传结论），用户实测后认为用处不大。
+                            另：曾为它写过自动路由插件 ctx-router（已一并卸载）。仅当用户重新要求时才装：
+                            npm install -g context-mode + profile 挂 mcp-context-mode + 重建 ctx-router
+                            （配方在 git 历史里：git show c3eab63 --stat；账本 plugins\ 两个自制件目录
+                            已随卸载移入回收站，可用 git checkout c3eab63 -- plugins/ 取回）
        donsetch 插件      : 已按用户要求于 2026-09-28 卸载（弃用）。恢复机器时**不要安装**；
                              仅当用户重新要求时：dsh plugin --profile web add github:dondai44423/donsetch-dsh
                              （配方见 plugins\donsetch\RECIPE.md；装后需给 daemon 配代理池）

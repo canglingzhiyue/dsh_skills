@@ -1038,7 +1038,6 @@ $Py = 'D:\AI_python\firerpa\.venv\Scripts\python.exe'
 | camoufox | `camoufox` | `mcp__camoufox__*` | `D:\AI_python\camoufox\.venv`（约 2.3 GB，见下） |
 | jadx | `jadx` | `mcp__jadx__*` | `D:\AI_python\MCP\MCP合集\jadx-mcp-server`（约 41 MB，见下） |
 | ida | `ida` | `mcp__ida__*` | 本机 IDA 9.4 的 idalib（无独立目录，`uvx` 跑 PyPI 包，见下） |
-| context-mode | `context-mode` | `mcp__context-mode__*` | 全局 npm 包（`npm install -g context-mode`，无独立目录，见下） |
 
 ### camoufox MCP
 
@@ -1122,93 +1121,31 @@ $Py = 'D:\AI_python\firerpa\.venv\Scripts\python.exe'
   `%APPDATA%\HexRays\IDA Pro\plugins\ida-mcp\`（hcli 可重装）、IDA 的 `venv`（可重建）、
   IDA 本体与 license（用户自行安装）。挂载条目已在 `config\cordis.patch.yml` 里。
 
-### context-mode MCP
+### context-mode MCP（**已卸载，新环境不要安装**）
 
-- **上游**：https://github.com/mksglu/context-mode （npm 包名同为 `context-mode`，Elastic-2.0 许可）
-- **它做什么**：把大块工具输出挡在上下文之外 —— 在沙箱子进程里跑代码 / 抓网页 / 建索引，只把结论回传
-  （官方基准 315 KB → 5.4 KB）；另带 SQLite 会话记忆与 FTS5 知识库检索。共 **11 个工具**：
-  `ctx_execute` / `ctx_execute_file` / `ctx_index` / `ctx_search` / `ctx_fetch_and_index` /
-  `ctx_batch_execute`（沙箱与索引）+ `ctx_stats` / `ctx_doctor` / `ctx_upgrade` / `ctx_purge` /
-  `ctx_insight`（meta）。
-- **重建运行时（一条命令）**：
+**2026-09-29 用户要求整体卸载** —— 实测后认为"用处也不大"。同一批卸载的还有为它写的自动路由插件
+`ctx-router`（自写原生 DSH 插件）；运行时也已 `npm uninstall -g context-mode`（移除 140 个包）。
 
-  ```powershell
-  npm install -g context-mode     # 前置 Node >= 22.5
-  # 本机落在 D:\ProgramsDev\nodejs\node_modules\context-mode（全局根 = D:\ProgramsDev\nodejs）
-  ```
-  它依赖原生模块 `better-sqlite3`。npm 可能报 `allow-scripts` 警告（install script 未登记）——
-  **先复核二进制是否已落位**，再决定要不要 `npm approve-scripts`：
+本机已完成的卸载动作（**顺序是关键：先改配置、后删文件**，否则热重载会 `ERR_MODULE_NOT_FOUND`）：
 
-  ```powershell
-  Get-ChildItem "$(npm root -g)\context-mode\node_modules\better-sqlite3" -Recurse -Filter *.node
-  # 出现 better_sqlite3.node（约 1.9 MB）即正常；再跑 context-mode doctor 应报 FTS5 / SQLite: PASS
-  ```
-- **命令**（挂载条目里写死的形态）：`node <npm 全局根>\context-mode\cli.bundle.mjs`
-  —— **不带任何参数就是 stdio MCP server**。刻意不用 `context-mode.cmd` shim：
-  Windows 下 spawn `.cmd` 需要 shell。若新环境的 npm 全局根不是 `D:\ProgramsDev\nodejs`，
-  改 `config\cordis.patch.yml` 该条的 `command` / `args`。
-- ⚠️ **必须显式设 `CONTEXT_MODE_DIR`**：它自己做平台探测，**只要 `~/.openclaw\` 目录存在就会把平台判成
-  OpenClaw**（medium confidence），存储随之写到 `~/.openclaw/context-mode/`。挂载条目里已设
-  `CONTEXT_MODE_DIR=C:\Users\y\.dsh\context-mode` 把它收回 `$DSH_HOME`；新环境照着改这一行路径。
-- ⚠️ **DSH 不在它的官方 17 平台清单内**：11 个 MCP 工具可用（走 standalone MCP 模式），
-  但它的 hook 层不认识 DSH 的工具名（见下「自动路由」）。也就是说它**不会自动抢走** `Bash` / `Read`：
-  要真省上下文，得靠下面的自动路由，或提示词与常驻规则引导。
-- ✅ **自动路由（自写原生插件 `ctx-router`，必须重建）**：由 DSH 自己的拦截缝 `tools/pre-execute`
-  自动拦截"抓大块数据"的工具调用，改道 `ctx_*` 沙箱。
+1. 备份 profile 的 `cordis.patch.yml` → `%TEMP%\cordis.patch.yml.bak-20260929-083027`；
+2. 删 `mcp-context-mode` 与 `ctx-router` 两个 `insert` 条目；
+3. `dsh --profile web --dump-config` 复核 exit 0（只剩 camoufox / jadx / ida）；
+4. 删 `$DSH_HOME\AGENTS.md` 的「上下文保护 — 大输出走沙箱」整节；
+5. `npm uninstall -g context-mode`；
+6. `$DSH_HOME\plugins\dsh-ctx-router\` 与 `$DSH_HOME\context-mode\` 移入回收站。
 
-  | 组件 | 来源 | 落在哪 |
-  |---|---|---|
-  | `lib\index.js` + `package.json` | **自制**，源码唯一副本在 `plugins\dsh-ctx-router\` | `$DSH_HOME\plugins\dsh-ctx-router\` |
-  | profile 挂载行（`insert`） | 随 `config\cordis.patch.yml` 恢复 | profile 的 `cordis.patch.yml` |
+**仅当用户重新要求时**才重建：源码与配方在 git 历史里 —— `git show c3eab63`，
+或 `git checkout c3eab63 -- plugins/` 取回移入回收站的两个自制件目录。
 
-  ```powershell
-  # 落位（两个文件都来自 plugins\dsh-ctx-router\）
-  $dst = "$env:USERPROFILE\.dsh\plugins\dsh-ctx-router"
-  New-Item -ItemType Directory -Force "$dst\lib" | Out-Null
-  Copy-Item plugins\dsh-ctx-router\lib\index.js "$dst\lib\" -Force
-  Copy-Item plugins\dsh-ctx-router\package.json "$dst\" -Force
-  ```
-  挂载条目（已随 `config\cordis.patch.yml` 恢复；注意 `file:///` 是三斜杠）：
-  ```yaml
-  - insert:
-      - id: ctx-router
-        name: 'file:///C:/Users/y/.dsh/plugins/dsh-ctx-router/lib/index.js'
-  ```
-  **为什么不能直接用官方的 `hooks/hooks.json`**：它里面写的是 Claude Code 的工具名（`Bash`/`Read`），
-  其 `core/routing.mjs` 的工具别名表**写死且无配置扩展点**，DSH 的 `pwsh`/`read`/`grep`
-  不在表里 → 官方 hook 收到 DSH 工具名会直接放行。
-  **⚠️ 也不要改用 `@deepseek-ai/dsh-hooks-claude-code` 桥接**（本仓库早期试过、已废弃）：
-  它 `inject` 的 `shell` / `sessionProjections` 在 profile 里不满足，cordis 会让它**永远等待、
-  `apply` 永不执行** —— 插件能被 `import`、loader 也不报错，但**一个 hook 都不注册**、配置根本不读。
-  完整证据见 `plugins\dsh-ctx-router\RECIPE.md`。
-  **不需要 `dsh plugin add`**：`insert.name` 直接写 `file:///` URL，cordis loader 用 `import()` 加载。
-  **拦截范围**：`pwsh` / `bash` 命中 `curl`/`wget`/`iwr`/`irm`/`Invoke-WebRequest`/`Invoke-RestMethod`/
-  `Get-Content -Raw`/`cat`/`type`/`Select-String`/`rg`/`findstr`/`docker logs`/`kubectl logs`/
-  `journalctl`/无上限 `git log`、`git diff`/`find`/`Get-ChildItem -Recurse`；`read` 未带
-  `limit`/`offset` 且 > 256 KB。**不拦** `grep`/`web_fetch`/`glob`/`edit`/`write` 与改状态操作。
-  **逃生舱**：命令含 `ctx-allow`、或 `read` 带 `limit`/`offset` → 放行；插件内部 fail-open（绝不阻断会话）。
-  **每次拦截**往 `$DSH_HOME\context-mode\ctx-router.log` 记一行。
-  **生效**：改 `cordis.patch.yml`（挂载配置）时，本机 profile 是 `patchReload: live`，
-  **改完即热重载、不需要重启**（实测同一会话下一条命令立刻被拦）；但**改插件源码
-  `lib\index.js` 必须重启**（热重载不会重新 `import` 已加载的模块，ESM 缓存）；
-  若某台机器 profile 是 `startup`，则两种改动都要重启。
-  **验证**：发一条 `Get-ChildItem <目录> -Recurse -File` 应被 deny 并提示改用 `ctx_*`，
-  且 `ctx-router.log` 出现 `DENY tool=pwsh`；`pwd` 应正常放行。
-  **仍未接**：`SessionStart` 上下文注入与 `PostToolUse` 会话捕获 —— 由 `$DSH_HOME\AGENTS.md`
-  的常驻规则覆盖（那条规则装完即生效、不依赖重启）。
-- **验证（三层）**：
-  1. `context-mode doctor` → `Server test: PASS`、`FTS5 / SQLite: PASS`；
-  2. `dsh --profile web --dump-config` 里出现 `id: mcp-context-mode` 与 `id: ctx-router`；
-  3. 发一条命中特征的 `pwsh` 命令会被拦（理由里给出 `ctx_batch_execute` 等替代），
-     且 `ctx-router.log` 有 `DENY` 行。
-- **升级**：`npm install -g context-mode@latest`（重新取最新版即可，挂载条目里的路径不变）。
-  升级**不影响**自制插件（没改它的源码）；但若官方调整工具名或路由语义，插件需复核。
-- **不备份**：npm 全局包本身（一条命令可重装）、`CONTEXT_MODE_DIR` 下的 SQLite 数据
-  （运行期会话轨迹与索引，属本机数据）。自制插件**要备份**（已在 `plugins\dsh-ctx-router\`）。
+**当初为何判定它对本机价值有限**：DSH 不在它的官方 17 平台清单内 → 11 个 `ctx_*` 工具可用，
+但**没有 hook 强制路由**；补上的自动路由插件虽实测能工作（拦截生效），但它是**启发式正则**、
+对所有会话全局生效且存在误拦风险，相比"模型自己判断该不该走沙箱"收益不明显。
+
 
 ### 不迁移 / 不备份
 
-四个 MCP 依赖的运行时（camoufox 的 venv+引擎约 **2.3 GB**、jadx 约 **41 MB**）**只记配方、不备份**；
-`ida` 与 `context-mode` 都没有独立运行时目录（`uvx` 跑 PyPI 包 / 全局 npm 包）。
+**三个** MCP 依赖的运行时（camoufox 的 venv+引擎约 **2.3 GB**、jadx 约 **41 MB**）**只记配方、不备份**；
+`ida` 没有独立运行时目录（`uvx` 跑 PyPI 包）。
 MCP 的挂载条目已在 `config\cordis.patch.yml` 里。JADX-GUI 及其插件、IDA 本体与其 license、
 IDA GUI 插件目录都属于**外部工具**，不在本仓库范围内 —— 需要用户自行安装。
