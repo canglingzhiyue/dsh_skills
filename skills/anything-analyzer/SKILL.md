@@ -109,6 +109,6 @@ mcp__analyzer__cdp_send_command
 
 - `references\mcp-tools.md` —— 30 个 MCP 工具清单、实测参数与返回值形状
 - `references\setup.md` —— 安装/重装、配置文件、CA 证书与手机抓包、升级
-- `scripts\start-analyzer.ps1` / `scripts\probe-mcp.ps1` —— 启动与探活
+- `scripts\start-analyzer.ps1` / `scripts\probe-mcp.ps1` / `scripts\mcp-call.mjs` —— 启动、探活、通用 MCP 调用（三者都自动从配置文件读 token）
 - 上游：https://github.com/Mouseww/anything-analyzer （MIT）
 - 案件库：`D:\AI_python\reverse-cases\2026-09-30_anything-analyzer\`

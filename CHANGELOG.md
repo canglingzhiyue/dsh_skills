@@ -63,7 +63,9 @@ DSH 自己留了原版 `~\.dsh\settings.yaml.imported`（1001 B，mtime `9:40:43
 
 ### 影响文件
 
-- 新增：`skills\anything-analyzer\`（5 文件）
+- 新增：`skills\anything-analyzer\`（6 文件，含 `scripts\mcp-call.mjs` —— 通用 MCP 调用探针，
+  **自动从 `mcp-server-config.json` 读 token**，不必每次手传凭据；有了它 skill 才真正自包含，
+  `references\mcp-tools.md` 里的"手动调用"示例不再指向案件库路径）
 - 新增：`config\settings.yaml.imported`（DSH 迁移前的原版，含 LLM provider 定义，无密钥）
 - 修改：`config\cordis.patch.yml`（+ `mcp-anything-analyzer` 条目）、`config\settings.yaml`（同步 DSH 现状）
 - 修改：`skills\reverse-skill-router\{SKILL.md, references\domain-registry.json, scripts\scan-capabilities.ps1}`

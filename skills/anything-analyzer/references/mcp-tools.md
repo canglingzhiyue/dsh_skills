@@ -80,13 +80,18 @@ Emulation.setDeviceMetricsOverride  # 移动端视口
 
 ## 手动调用（GUI 不配合时）
 
+两个脚本都**从 `mcp-server-config.json` 自动读 token**，不需要手动传凭据。
+
 ```powershell
-# 探活 + 列工具
+# 探活 + 列工具（curl 实现，退出码 0 = 可用）
 pwsh -File "$env:USERPROFILE\.dsh\skills\anything-analyzer\scripts\probe-mcp.ps1"
 
-# 任意工具调用（Node + MCP SDK）
-$env:MCP_TOKEN = (Get-Content "$env:APPDATA\anything-analyzer\mcp-server-config.json" -Raw | ConvertFrom-Json).authToken
-node <案件库>\debug\mcp-call.mjs filter_requests '{"sessionId":"<sid>","domain":"api.example.com"}'
+# 列全部工具 / 任意工具调用（Node + MCP SDK 实现）
+$MCP = "$env:USERPROFILE\.dsh\skills\anything-analyzer\scripts\mcp-call.mjs"
+node $MCP __list__
+node $MCP list_sessions
+node $MCP filter_requests '{"sessionId":"<sid>","domain":"api.example.com"}'
+node $MCP get_request_detail '{"requestId":"<rid>"}'
 ```
 
-> **不要用 `Invoke-WebRequest`** —— 它对 `mcp-session-id` header 处理有问题，第二个请求必 404。用 `curl.exe` 或 MCP SDK。
+> **不要用 `Invoke-WebRequest`** —— 它对 `mcp-session-id` header 处理有问题，第二个请求必 404。用 `curl.exe`（探活脚本）或 MCP SDK（调用脚本）。
