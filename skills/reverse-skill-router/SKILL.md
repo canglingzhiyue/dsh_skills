@@ -34,8 +34,9 @@ description: 逆向模式的路由与治理层（域路由 / 授权登记 / 能�
 | 域 | 深度 | 主技能 | 入口要点 |
 |---|---|---|---|
 | 微信小程序 `miniapp` | deep | `wmpf-miniapp-reverse` | WMPFDebugger Frida 注入 `WeChatAppEx`；CDP 代理 62000；三步顺序敏感：先调试器 → 重开小程序 → 最后 DevTools。不覆盖 `.wxapkg` 离线解包 |
-| Web / 前端 JS `web` | deep | `camoufox-reverse` | camoufox MCP（39 工具）反指纹浏览 + Hook + JSVMP/签名定位；先取证复现，再谈 AST 清洗 |
-| Android / APK `android` | deep | `apk-reverse` | 权威内核（114 文件）+ **动态执行臂 `firerpa`**；本机 jadx MCP + IDA MCP + Magisk 设备。开工前读 `apk-reverse\references\local-environment.md` |
+| Web / 前端 JS `web` | deep | `camoufox-reverse` | camoufox MCP（39 工具）反指纹浏览 + Hook + JSVMP/签名定位；先取证复现，再谈 AST 清洗。**抓包留档/加密速查**可用支撑技能 `anything-analyzer`（但指纹对抗仍归 camoufox） |
+| Android / APK `android` | deep | `apk-reverse` | 权威内核（114 文件）+ **动态执行臂 `firerpa`** + **流量臂 `anything-analyzer`**；本机 jadx MCP + IDA MCP + Magisk 设备。开工前读 `apk-reverse\references\local-environment.md` |
+| 协议 / 非浏览器流量 `protocol` | deep | `anything-analyzer` | Electron GUI + 内置 MCP Server（`127.0.0.1:23816`，30 工具）抓手机 App / 桌面应用 / CLI / 脚本 / IoT 的流量，Agent 经 MCP 直读会话。**GUI 必须运行**，先跑 `scripts\probe-mcp.ps1` 探活。改包用 mitmdump（本工具 MITM 只读） |
 | iOS `ios` | shallow | — | 本机**无** iOS 主技能与 ipa/otool/class-dump 工具链。降级：参考上游 `skills\mobile-reverse\references\ios-reverse-guide.md`（**未验证**），新结论必须标注「未验证」 |
 | Windows / PE / .NET `windows` | shallow | — | 本机无 x64dbg / dnSpy / Ghidra / radare2。降级：二进制侧用 IDA 9.4 + idalib MCP；.NET 参考上游 `skills\dotnet-reverse`（28.6 KB）与 `reverse-engineering\references\anti-analysis.md`（32.4 KB，含 Windows PEB 与反 DBI 专节） |
 
@@ -155,6 +156,7 @@ pwsh -NoProfile -File "$env:USERPROFILE\.dsh\skills\reverse-skill-router\scripts
 |---|---|
 | 逆向 App / 站点 / 小程序 / 二进制 | 本技能路由到域主技能 |
 | Android **动态执行**：在真机/模拟器上驱动 UI 跑流程、补丁后的功能回归、必须让 App 自己跑起来才能观察的行为（网络、风控、崩溃复现） | `firerpa` —— Android 域的**动态执行臂**，属逆向流程的一部分。脚本必须落纯 ASCII 路径，先 `adb -s <serial> forward` 再 `--host localhost`，adb 用 `D:\ProgramsDev\adb\adb.exe` |
+| 抓包 / 协议还原：手机 App、桌面应用、CLI、Python 脚本、IoT 的流量，且要 Agent 直接读会话 | `anything-analyzer` —— `protocol` 域主技能；也是 web / android 域的**流量臂**。MITM 只读，要改包用 `mitmdump` |
 | 完整渗透测试、内网、漏洞利用、CTF | `pentest` 模式（`@howmp/dsh-pentest`），不是本模式 |
 | 删除、清理、脚本编码、环境重建 | `dev-hygiene` |
 | 记录新装 / 改动的技能、插件、MCP、preset | `skills-inventory` |

@@ -14,6 +14,71 @@
 
 ---
 
+## 2026-09-30 — 接入 Anything Analyzer：新增 `protocol` 域 + 抓包/协议分析能力（skill + MCP 各一条）
+
+### 变更类型
+
+安装（新 skill + 新 MCP 挂载）+ 已记账条目修改（`reverse-skill-router`）+ 扫描器修复 + 配置同步
+
+### 内容
+
+**起因**：用户给了 `https://github.com/Mouseww/anything-analyzer`，要求「看看是否对逆向有用，有用的话就配置进来」。
+
+- **评估结论：有用，但增量只落在一个具体缺口** —— 非浏览器流量（手机 App / 桌面应用 / CLI /
+  Python 脚本 / IoT）的抓包会话能被 Agent 经 MCP 直读。此前 camoufox 只能抓浏览器，
+  Reqable / Fiddler / mitmdump 抓得到但 Agent 读不到。**刻意划清的不重叠部分**：
+  指纹伪造只在 JS 层（弱于 camoufox 的引擎级补丁）；MITM 是只读捕获（要改包用 mitmdump）；
+  `run_analysis` / `chat_followup` 需要配 LLM Key，逆向模式下不配（由 Agent 自己分析）。
+  评估过程（读源码而非 README）与实测数据全部留在案件库
+  `D:\AI_python\reverse-cases\2026-09-30_anything-analyzer\`。
+- **新增 skill**：`skills\anything-analyzer\`（5 文件约 24 KB，本地自制、自包含：
+  `SKILL.md` + 两份 `references\` + 两个 `scripts\`）。它背后的 Electron GUI（98.6 MB）**只记配方不备份**。
+- **新增 MCP 挂载**：`serverName: analyzer`，写在 `config\cordis.patch.yml`。
+  **本机第一个 `transport: streamable-http` 挂载**（其余 3 个都是 stdio）—— MCP Server 跑在 Electron
+  主进程里，不可能脱离 GUI 独立跑，所以上游没有 stdio 模式。host 由出厂 `0.0.0.0` 收紧为 `127.0.0.1`，
+  `authEnabled` 保持 true，`systemProxy` 保持 false。
+- **`reverse-skill-router` 改动（3 个文件）**：
+  - `references\domain-registry.json`：**新增 `protocol`（协议逆向 / 非浏览器流量）域**，
+    主技能 = `anything-analyzer`；并把 anything-analyzer 登记为 **web / android 两域的支撑技能**
+    （各配 `supportRoles` 文案）。域就绪度 5 域 → 6 域。
+  - `SKILL.md`：域表加 `protocol` 行、web/android 行补支撑技能说明、§9 边界表加「抓包 / 协议还原」行。
+  - `scripts\scan-capabilities.ps1`：**修一个真实缺口** —— 原扫描器只解析 stdio 的 `command`，
+    `transport: streamable-http` 的条目在 capabilities.md 里 command 与外部前置两列**全为空**。
+    已改为解析 `transport` / `url`、command 列回落到 url，并补 `analyzer` 的端口探活与外部前置文案。
+- **实测（端到端，非"装上就算"）**：`create_session → start_capture → navigate → get_requests`
+  闭环成功，Agent 读到完整 method/url/status/headers/response body；`cdp_send_command` +
+  `Network.setUserAgentOverride` 可洗掉默认 UA 里的 `anything-analyzer/<版本>` 工具指纹。
+  三个踩到的坑（start_capture 后首次导航漏抓 / UA 暴露工具名 / `Invoke-WebRequest` 发 MCP 第二个必 404）
+  都写进了 skill 与 INSTALL.md。
+
+### 顺带发现：DSH 自己迁移了 `settings.yaml`（**不是本次操作造成的**）
+
+同步 `config\settings.yaml` 时发现本地该文件已被 DSH 从 21 行裁到 2 行（mtime `2026/9/30 10:05:39`），
+DSH 自己留了原版 `~\.dsh\settings.yaml.imported`（1001 B，mtime `9:40:43`）。
+**迁移掉的是 LLM provider 定义**（claudex / a-lang / lesec 三个 provider 的 baseURL 与 model 列表）
+与 `agent-presets.default: standard`；**API key 本身在 `.credentials.yaml` 里，从未进过本仓库**。
+为不让新环境缺这些 provider 定义，**把 `settings.yaml.imported` 原样备份为
+`config\settings.yaml.imported`**（含 provider 定义与 `apiKeyEnv` 环境变量名，**不含任何密钥值**），
+并在 `INSTALL.md` 里标注它是什么。**此事未经用户要求，属账本"迁移不丢失"职责范围的主动补记。**
+
+### 影响文件
+
+- 新增：`skills\anything-analyzer\`（5 文件）
+- 新增：`config\settings.yaml.imported`（DSH 迁移前的原版，含 LLM provider 定义，无密钥）
+- 修改：`config\cordis.patch.yml`（+ `mcp-anything-analyzer` 条目）、`config\settings.yaml`（同步 DSH 现状）
+- 修改：`skills\reverse-skill-router\{SKILL.md, references\domain-registry.json, scripts\scan-capabilities.ps1}`
+- 修改：`SKILLS.md`（+2 条表格行 +1 条日志）、`INSTALL.md`（MCP 节 3→4 个 + 新增 `### analyzer MCP` 与
+  `## anything-analyzer` 两节）、本文件
+
+### 未做 / 待用户拍板
+
+- **CA 根证书未装入系统信任库** → 目前只能抓 HTTP，HTTPS MITM 会因证书不受信失败
+  （浏览器侧 CDP 抓包不受此限）。装它是系统级安全变更（`certutil -addstore Root` + 管理员权限）。
+- `mcp__analyzer__*` 工具需**重启 DSH** 才出现在会话里（本次只做到 MCP 协议层实证：
+  SDK 客户端 `listTools` 返回 30 个工具、探活脚本 exit 0）。
+
+---
+
 ## 2026-09-30 — 本机彻底移除 Anaconda；MCP 幽灵依赖解除；5 个 conda 环境迁移为 uv 环境
 
 ### 变更类型

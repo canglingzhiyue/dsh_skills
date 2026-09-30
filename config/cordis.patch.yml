@@ -79,6 +79,30 @@
           PYTHONIOENCODING: 'utf-8'
         toolCallTimeoutMs: 600000
 
+# ---------------------------------------------------------------------------
+# Anything Analyzer MCP —— 抓包/协议分析工具（内置 MCP Server，StreamableHTTP）
+# 上游：https://github.com/Mouseww/anything-analyzer （MIT，Electron GUI 应用）
+# 本机安装：D:\ProgramsDev\AnythingAnalyzer\Anything Analyzer.exe
+# 配置：%APPDATA%\anything-analyzer\mcp-server-config.json
+#   { enabled:true, host:"127.0.0.1", port:23816, authEnabled:true, authToken:"<见该文件>" }
+# 外部前置：GUI 应用必须处于运行状态（MCP Server 跑在 Electron 主进程里）；
+#   不开 GUI → 23816 无监听 → 本 MCP 静默失效（failOnStartupError:false）。
+#   探活：pwsh -File <skills>\anything-analyzer\scripts\probe-mcp.ps1
+# 工具在会话里以 mcp__analyzer__<tool> 暴露，例如 mcp__analyzer__get_requests
+# 注意：Authorization 的 token 与本机 %APPDATA% 配置文件一致；换机器需重取。
+# ---------------------------------------------------------------------------
+- insert:
+    - id: mcp-anything-analyzer
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: analyzer
+        transport: streamable-http
+        url: 'http://127.0.0.1:23816/mcp'
+        headers:
+          Authorization: 'Bearer fc6816bb-4220-42f4-8baf-9f6595b3bfd1'
+        toolCallTimeoutMs: 120000
+        failOnStartupError: false
+
 
 
 

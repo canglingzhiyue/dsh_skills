@@ -1,4 +1,4 @@
-#Requires -Version 7.0
+﻿#Requires -Version 7.0
 <#
 .SYNOPSIS
     逆向模式能力扫描器 —— 生成 capabilities.json / capabilities.md，并做悬空引用检查。
@@ -166,7 +166,7 @@ foreach ($s in $specs) {
 
 # ── 2. MCP 挂载（从 profile 的 cordis.patch.yml 解析） ──────────────────────
 
-$mcpPorts = @{ 'jadx' = 8650; 'ida' = 0; 'camoufox' = 0 }
+$mcpPorts = @{ 'jadx' = 8650; 'ida' = 0; 'camoufox' = 0; 'analyzer' = 23816 }
 $mcp = @()
 if (Test-Path -LiteralPath $ProfilesRoot) {
     foreach ($prof in @(Get-ChildItem -LiteralPath $ProfilesRoot -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'node_modules' })) {
@@ -178,12 +178,15 @@ if (Test-Path -LiteralPath $ProfilesRoot) {
                 if ($cur) { $mcp += $cur }
                 $cur = [ordered]@{
                     profile = $prof.Name; serverName = $Matches[1]; command = $null
+                    transport = $null; url = $null
                     args = @(); timeoutMs = $null; failOnStartupError = $null
                     externalPrerequisite = $null; probe = $null
                 }
                 continue
             }
             if (-not $cur) { continue }
+            if ($ln -match 'transport:\s*''?([A-Za-z\-]+)''?\s*$') { $cur.transport = $Matches[1].Trim(); continue }
+            if ($ln -match 'url:\s*''?([^''\r\n]+?)''?\s*$') { $cur.url = $Matches[1].Trim(); continue }
             if ($ln -match 'command:\s*''?([^''\r\n]+?)''?\s*$') { $cur.command = $Matches[1].Trim(); continue }
             if ($ln -match '^\s+-\s+''?([^'':\r\n]+?)''?\s*$') { $cur.args += $Matches[1].Trim(); continue }
             if ($ln -match 'toolCallTimeoutMs:\s*(\d+)') { $cur.timeoutMs = [int]$Matches[1]; continue }
@@ -198,6 +201,7 @@ foreach ($m in $mcp) {
         'jadx' { $m.externalPrerequisite = 'JADX-GUI 必须开启并装 jadx-ai-mcp 插件（默认 127.0.0.1:8650）' }
         'ida' { $m.externalPrerequisite = '本机 IDA 9.4 + idalib（路径见 %APPDATA%\Hex-Rays\IDA Pro\ida-config.json）' }
         'camoufox' { $m.externalPrerequisite = 'D:\AI_python\camoufox 独立 venv；首次使用先预热' }
+        'analyzer' { $m.externalPrerequisite = 'Anything Analyzer GUI 必须处于运行状态（MCP Server 跑在 Electron 主进程里）；探活 pwsh -File $env:USERPROFILE\.dsh\skills\anything-analyzer\scripts\probe-mcp.ps1' }
         default { $m.externalPrerequisite = $null }
     }
     if ($mcpPorts.ContainsKey($m.serverName) -and $mcpPorts[$m.serverName] -gt 0) {
@@ -373,7 +377,9 @@ $md.Add('| serverName | profile | command | 外部前置 | 探测 |')
 $md.Add('|---|---|---|---|---|')
 foreach ($m in $mcp) {
     $probeText = if ([string]::IsNullOrWhiteSpace($m.probe)) { '-' } else { $m.probe }
-    $md.Add("| ``$($m.serverName)`` | $($m.profile) | ``$($m.command)`` | $($m.externalPrerequisite) | $probeText |")
+    # stdio 挂载显示 command；streamable-http 挂载没有 command，显示 url
+    $cmdText = if ($m.command) { $m.command } elseif ($m.url) { "$($m.transport) $($m.url)" } else { '' }
+    $md.Add("| ``$($m.serverName)`` | $($m.profile) | ``$cmdText`` | $($m.externalPrerequisite) | $probeText |")
 }
 $md.Add('')
 $md.Add('## 2. 本机工具')

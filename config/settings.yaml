@@ -1,21 +1,2 @@
 ui-onboarding:
   welcomeNoticeVersion: 2026-08-13.1
-ui-theme:
-  preference: system
-agent-default-model:
-  provider: claudex
-  model: deepseek-v4.1-flash
-agent-presets:
-  default: standard
-llm-pi-ai:
-  providers:
-    claudex:
-      displayName: claudex
-      apiKeyEnv: CLAUDEX_API_KEY
-      api: openai-completions
-      baseURL: https://claudex.org/v1
-      models:
-        - id: deepseek-v4.1-flash
-          name: deepseek-v4.1-flash
-ui-conversation:
-  busyEnter: steer

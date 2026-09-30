@@ -1131,7 +1131,7 @@ pwsh -NoProfile -File "$env:USERPROFILE\.dsh\skills\reverse-skill-router\scripts
 
 ## MCP（P2 独立类 · 网络来源 + 本地运行时）
 
-本机在 `<profile>\cordis.patch.yml` 里挂了 **3 个 MCP server**。它们**不是 skill、也不是 npm 插件**，
+本机在 `<profile>\cordis.patch.yml` 里挂了 **4 个 MCP server**。它们**不是 skill、也不是 npm 插件**，
 而是一条 DSH 配置（`@deepseek-ai/dsh-mcp-client` 的 `insert` 条目）—— 但同样必须迁移，
 否则新环境会少掉这些工具。配置文件整份备份在 **`config\cordis.patch.yml`**。
 
@@ -1144,6 +1144,7 @@ pwsh -NoProfile -File "$env:USERPROFILE\.dsh\skills\reverse-skill-router\scripts
 | camoufox | `camoufox` | `mcp__camoufox__*` | `D:\AI_python\camoufox\.venv`（约 2.3 GB，见下） |
 | jadx | `jadx` | `mcp__jadx__*` | `D:\AI_python\MCP\MCP合集\jadx-mcp-server`（约 41 MB，见下） |
 | ida | `ida` | `mcp__ida__*` | 本机 IDA 9.4 的 idalib（无独立目录，`uvx` 跑 PyPI 包，见下） |
+| analyzer | `analyzer` | `mcp__analyzer__*` | **Anything Analyzer Electron GUI**（`D:\ProgramsDev\AnythingAnalyzer`，约 300 MB，见下）—— 注意它是**唯一的 `transport: streamable-http` 挂载**，不是 stdio |
 
 ### camoufox MCP
 
@@ -1227,6 +1228,74 @@ pwsh -NoProfile -File "$env:USERPROFILE\.dsh\skills\reverse-skill-router\scripts
   `%APPDATA%\HexRays\IDA Pro\plugins\ida-mcp\`（hcli 可重装）、IDA 的 `venv`（可重建）、
   IDA 本体与 license（用户自行安装）。挂载条目已在 `config\cordis.patch.yml` 里。
 
+### analyzer MCP（**唯一的非 stdio 挂载**）
+
+- **上游**：https://github.com/Mouseww/anything-analyzer （内置 MCP Server，`@modelcontextprotocol/sdk` 1.29，**30 个工具**）
+- **它依赖的运行时 = 一个 Electron GUI 应用**（不是 python/node 服务）：
+  `D:\ProgramsDev\AnythingAnalyzer\Anything Analyzer.exe`。**MCP Server 跑在 Electron 主进程里**，
+  依赖 `session` / `windowManager` / `AiAnalyzer`，**不可能脱离 GUI 独立跑** ——
+  这就是上游只给 HTTP 端点、没有 stdio 模式的原因。
+- **安装应用**（重建步骤，详见 `skills\anything-analyzer\references\setup.md`）：
+
+  ```powershell
+  $p   = "http://127.0.0.1:7890"      # 本机直连 GitHub 会 Connection reset，必须走代理
+  $ver = "3.6.62"                      # ⚠️ Release 的 tag 名与包内版本号不一致：tag 是 v3.6.61
+  $url = "https://github.com/Mouseww/anything-analyzer/releases/download/v3.6.61/Anything-Analyzer-Setup-$ver.exe"
+  $out = "$env:TEMP\Anything-Analyzer-Setup-$ver.exe"
+  Invoke-WebRequest -Uri $url -Proxy $p -OutFile $out
+  (Get-FileHash $out -Algorithm SHA256).Hash.ToLower()
+  #   ffe94c78df92a84d5ad347fa2938c0aec63775ce925c9cbac6ee3ad912c2c60c
+  Start-Process -FilePath $out -ArgumentList "/S","/D=D:\ProgramsDev\AnythingAnalyzer" -Wait
+  ```
+  （`/D=` 必须**是最后一个参数且不加引号**。资产列表见
+  `https://github.com/Mouseww/anything-analyzer/releases/expanded_assets/<tag>`。）
+
+- **配置（纯 JSON 文件，改完重启应用生效，不必点 GUI）** —— 这一步是集成的关键，不做的话
+  MCP 端口根本不监听：
+
+  `%APPDATA%\anything-analyzer\mcp-server-config.json`
+  ```json
+  { "enabled": true, "host": "127.0.0.1", "port": 23816, "authEnabled": true, "authToken": "<uuid>" }
+  ```
+  `%APPDATA%\anything-analyzer\mitm-proxy-config.json`
+  ```json
+  { "enabled": true, "port": 8888, "caInstalled": false, "systemProxy": false }
+  ```
+
+  - 用户数据目录用的是 package.json 的 **`name`**（`anything-analyzer`），**不是** productName ——
+    所以路径是 `%APPDATA%\anything-analyzer\`，不要去找 `%APPDATA%\Anything Analyzer\`。
+  - `authToken` 留空时首次启动**自动生成 UUID 并写回该文件**；把它填进
+    `config\cordis.patch.yml` 里 analyzer 条目的 `headers.Authorization: Bearer <token>`。
+    **`config\cordis.patch.yml` 里现存的那个值是本机的**（回环服务凭证，泄漏面仅限本机 23816 端口），
+    换机器重新生成后要替换。
+  - `host` 出厂默认是 `0.0.0.0`（对局域网暴露）—— 本机已收紧为 `127.0.0.1`。
+    手机抓包走的是 MITM 的 8888，不受影响。
+  - `systemProxy: false` = **不动系统代理**。
+
+- ⚠️ **外部前置**：**GUI 必须处于运行状态**。该条目是 `failOnStartupError: false` ——
+  **启动失败不会报错**，静默失效。所以动手前先探活：
+
+  ```powershell
+  pwsh -File "$env:USERPROFILE\.dsh\skills\anything-analyzer\scripts\probe-mcp.ps1"
+  # 退出码 0 = 可用，并打印工具数（期望 30）；1 = 未就绪（会说明是配置没开、端口不通还是握手失败）
+  # 一键启动 + 等就绪：
+  pwsh -File "$env:USERPROFILE\.dsh\skills\anything-analyzer\scripts\start-analyzer.ps1"
+  ```
+
+- **验证**：重启 DSH 后会话里应出现 `mcp__analyzer__*`（30 个，如 `get_requests` / `filter_requests` /
+  `cdp_send_command`）。本机实测闭环：`create_session` → `start_capture` → `navigate` → `get_requests`
+  能读到完整 method/url/status/headers/response body。
+- **踩过的坑（别重踩）**：① `start_capture` 之后**第一次导航会漏抓**（CDP attach 需时间）——
+  先"预热"导航一次或等 2-3 秒；② 默认 UA 带 `anything-analyzer/<版本>`，**站点一眼识别抓包工具** ——
+  用 `cdp_send_command` + `Network.setUserAgentOverride` 洗掉；③ **`Invoke-WebRequest` 发 MCP 请求
+  第二个必 404**，必须用 `curl.exe` 或 MCP SDK（探活脚本已按此实现）。
+- **不迁移 / 不备份**：应用本体（约 300 MB，Release 重装）、`%APPDATA%\anything-analyzer\` 下的
+  运行时数据（数据库、缓存、`certs\ca-key.pem` —— **私钥，永不备份**）。挂载条目已在
+  `config\cordis.patch.yml` 里。
+- **CA 根证书**：本机**尚未**装入系统信任库 → 目前**只能抓 HTTP**，HTTPS MITM 会因证书不受信而失败
+  （浏览器侧 CDP 抓包不受此限）。装它是系统级安全变更（`certutil -addstore Root` + 管理员），
+  **要用户拍板**。手机侧的步骤与 Android 7+ 的信任限制见 `skills\anything-analyzer\references\setup.md`。
+
 ### context-mode MCP（**已卸载，新环境不要安装**）
 
 **2026-09-29 用户要求整体卸载** —— 实测后认为"用处也不大"。同一批卸载的还有为它写的自动路由插件
@@ -1308,3 +1377,78 @@ Get-ChildItem D:\AI_python -Recurse -Filter pyvenv.cfg -Depth 4 | Select-String 
 - 旧环境的完整 `pip freeze` / `conda list` / 配置快照留在 `D:\dev\py\_conda_migration_2026-09-29\`。
 - PyCharm 项目 `D:\dev\py\code\juhe5\.idea\misc.xml` 里还有一条失效的 `<option name="sdkName" value="juhe4" />`（历史残留，不影响使用）。
 - **MCP 的 `cordis.patch.yml` 改动需重启 DSH 才生效**；重启后 jadx / ida 会用独立 uv 拉起。
+
+## anything-analyzer（P2 独立类 · 本地自制 skill + 网络来源的运行时）
+
+**装什么**：一个本地自制的 skill（抓包 / 协议分析），以及它背后那个 Electron GUI 应用。
+
+### 1) skill 本体（自包含，直接复制）
+
+```powershell
+# 整份复制，DSH 原生 frontmatter，无需改造
+Copy-Item -Recurse "skills\anything-analyzer" "$env:USERPROFILE\.dsh\skills\"
+```
+
+目录自包含：`SKILL.md` + `references\mcp-tools.md`（30 个 MCP 工具与实测参数）+
+`references\setup.md`（安装 / 配置 / CA 证书 / 手机抓包 / 升级 / 卸载配方）+
+`scripts\start-analyzer.ps1` + `scripts\probe-mcp.ps1`。
+
+它是 **`protocol`（协议逆向 / 非浏览器流量）域的主技能**，同时是 **web 域与 android 域的支撑技能**
+（路由表在 `$DSH_HOME\skills\reverse-skill-router\references\domain-registry.json`，随该 skill 一起恢复）。
+
+### 2) 背后的运行时（**只记配方，不备份**）
+
+Electron 应用，约 300 MB。**重建步骤、SHA256、Release tag 与包内版本号不一致的坑、
+两条 JSON 配置、外部前置与验证方法，全在上一节「### analyzer MCP」里**，照着做即可。
+
+### 3) 配套的 DSH 侧改动（新环境一并恢复）
+
+| 文件 | 改了什么 |
+|---|---|
+| `config\cordis.patch.yml` | 新增 `mcp-anything-analyzer` 的 `insert` 条目（`transport: streamable-http`） |
+| `skills\reverse-skill-router\references\domain-registry.json` | 新增 `protocol` 域；web / android 域加入 anything-analyzer 支撑角色 |
+| `skills\reverse-skill-router\SKILL.md` | 域表加 `protocol` 行；§9 边界表加「抓包 / 协议还原」行 |
+| `skills\reverse-skill-router\scripts\scan-capabilities.ps1` | **新增 streamable-http 分支**（原先只认 stdio，非 stdio 条目在能力清单里 command/前置两列会全空） |
+
+### 4) 验证
+
+```powershell
+# skill 进了 catalog？（新会话里）应能 skill 加载 anything-analyzer
+# MCP 可用？
+pwsh -File "$env:USERPROFILE\.dsh\skills\anything-analyzer\scripts\probe-mcp.ps1"   # 期望 exit 0 + 30 个工具
+# 能力清单刷新（域注册表新增了 protocol 域，必须重跑）
+pwsh -File "$env:USERPROFILE\.dsh\skills\reverse-skill-router\scripts\scan-capabilities.ps1"
+# 期望概览行出现 protocol=deep，MCP 数 4，技能数 9
+```
+
+**装完必须重启 DSH**（MCP 在 profile 启动时组合）。
+
+### 5) 维护提醒
+
+- **GUI 升级后**：UA 里的版本串会变、工具面可能变 → 重跑探活脚本确认 30 个工具，
+  并检查 `mcp-server-config.json` 的 `enabled` 是否被重置为 false。
+- **skill 目录一旦改动**（例如补了新踩的坑），要重新同步到 `skills\anything-analyzer\` 并提交 ——
+  否则自包含的那份会静默过期。
+- **`certs\ca-key.pem` 是私钥**，永不进仓库；`ca-cert.pem` 可按需重建。
+
+## （2026-09-30）DSH 自己迁移了 `settings.yaml` —— LLM provider 定义另有备份
+
+**背景**：2026-09-30 同步配置时发现 `~\.dsh\settings.yaml` 已被 **DSH 自身**从 21 行裁到 2 行
+（只剩 `ui-onboarding`），原版被 DSH 保留为 `~\.dsh\settings.yaml.imported`（1001 B）。
+迁移掉的是 **LLM provider 定义**与 `agent-presets.default`；**API key 本身在 `.credentials.yaml` 里，
+从未进过本仓库**（凭据永不备份）。
+
+**处理**：把原版**原样**备份为 **`config\settings.yaml.imported`**
+（含 claudex / a-lang / lesec 三个 provider 的 `baseURL` 与 `model` 列表，
+以及 `apiKeyEnv` **环境变量名** —— 已扫描确认**不含任何密钥值**）。
+
+**新环境怎么用**：
+
+- `config\settings.yaml` = DSH 迁移**后**的现状（只有 UI 项），照常放回 `~\.dsh\settings.yaml`；
+- `config\settings.yaml.imported` 是**参考件**，不是直接放回的文件。它用来说明「本机原本有哪些 LLM
+  provider、baseURL 是什么、model id 叫什么」，重建时据此在 DSH 里重新配一遍；
+- 对应的 API key 值在 `.credentials.yaml` / `.env` 里，**永不迁移**，必须手填；
+- 若新环境把 `settings.yaml.imported` 直接改名放回，**DSH 可能会再次触发迁移** —— 不必惊慌，
+  照它留下的新的 `.imported` 再对一次即可。
+
+**注意**：这属于 DSH 自身的行为变化（非用户要求、非本仓库改动引起），这里只做事实记录与迁移补位。

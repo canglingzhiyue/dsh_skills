@@ -17,8 +17,11 @@
       "label": "Web / 前端 JS",
       "depth": "deep",
       "primarySkills": ["camoufox-reverse"],
-      "supportingSkills": ["reverse-skill-router"],
+      "supportingSkills": ["anything-analyzer", "reverse-skill-router"],
       "entryHint": "camoufox MCP（39 工具，launch_browser 起）做反指纹浏览、Hook、JSVMP/签名参数定位；先取证复现再谈 AST 清洗。",
+      "supportRoles": {
+        "anything-analyzer": "浏览器侧抓包留档与前端加密速查：内嵌浏览器 CDP 抓包 + JS Hook（fetch/XHR/crypto.subtle/CryptoJS/SM2-4）零配置记录，Agent 经 MCP 直读。只有在「不需要指纹对抗」时才用它——它的指纹伪造只在 JS 层，且默认 UA 暴露工具名（可用 cdp_send_command + Network.setUserAgentOverride 洗掉）。有反爬的站点仍走 camoufox。"
+      },
       "acceptance": ["签名/加密参数可本地复现", "请求可重放成功"]
     },
     {
@@ -26,12 +29,22 @@
       "label": "Android / APK",
       "depth": "deep",
       "primarySkills": ["apk-reverse"],
-      "supportingSkills": ["firerpa", "reverse-skill-router"],
+      "supportingSkills": ["anything-analyzer", "firerpa", "reverse-skill-router"],
       "entryHint": "权威内核为 skills\\apk-reverse（114 文件）；动态执行臂是 firerpa。本机有 jadx MCP（需 JADX-GUI + 8650 在线）与 IDA 9.4 MCP，先读 capabilities.md 与 apk-reverse\\references\\local-environment.md 再动手。",
       "supportRoles": {
+        "anything-analyzer": "App 流量抓包臂：MITM 代理（0.0.0.0:8888）+ 内置 MCP Server，手机 Wi-Fi 挂代理后 App 请求汇入统一会话，Agent 经 MCP 直读（filter_requests / get_request_detail）。**注意 Android 7+ 默认不信任用户 CA**：真机需 Magisk 把 CA 塞进系统存储（/system/etc/security/cacerts/），否则 App 流量握手失败；H5/浏览器流量不受此限。用 firerpa 驱动 App 走流程、anything-analyzer 读流量，是补丁后回归验证的常用组合。",
         "firerpa": "动态执行臂（属于逆向，不是外围自动化）：真机/模拟器上的 UI 驱动、批量点击走流程、补丁后的功能回归验证、以及需要「让 App 自己跑起来」才能观察的行为。脚本必须落纯 ASCII 路径（中文路径会让 import lamda 崩 UnicodeEncodeError）；先 adb -s <serial> forward tcp:65000 tcp:65000 再 --host localhost；adb 一律用 D:\\ProgramsDev\\adb\\adb.exe"
       },
       "acceptance": ["apk-reverse 的 done 六条", "patch-audit 双层（Tier1 长度扫描 + Tier2 逐 opcode）", "control build 对照", "动态回归：firerpa 在真实设备上跑通目标流程且相邻功能仍可用"]
+    },
+    {
+      "id": "protocol",
+      "label": "协议逆向 / 非浏览器流量",
+      "depth": "deep",
+      "primarySkills": ["anything-analyzer"],
+      "supportingSkills": ["reverse-skill-router"],
+      "entryHint": "主技能 anything-analyzer（Electron GUI + 内置 MCP Server）：内嵌浏览器 CDP 抓包 + MITM 代理（0.0.0.0:8888）+ 统一会话，MCP 在 127.0.0.1:23816，工具名 mcp__analyzer__*。GUI 必须运行——MCP 跑在 Electron 主进程里，不开 GUI 就静默失效，先跑 scripts\\probe-mcp.ps1 探活、scripts\\start-analyzer.ps1 启动。覆盖手机 App / 桌面应用 / curl / Python 脚本 / IoT 的流量，Agent 直接读会话。需要「改包」时改用 mitmdump：本工具 MITM 是只读捕获。",
+      "acceptance": ["抓到的请求可被 Agent 经 MCP 直接读取（filter_requests 返回非空且字段完整）", "请求可重放成功", "含签名/加密参数时，参数来源已定位（get_hooks 或源码）并可本地复现"]
     },
     {
       "id": "ios",
