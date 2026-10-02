@@ -19,8 +19,11 @@ remote = `https://github.com/canglingzhiyue/dsh_skills.git`。换机器时改这
 
 - **skill** —— `$DSH_HOME/skills` 下的一个目录；
 - **DSH 插件** —— 某个 profile 的 `dependencies` / `dsh.profile.bundles` 里**非 `@deepseek-ai/*`** 的条目；
-- **MCP server 挂载** —— profile 的 `cordis.patch.yml` 里 `@deepseek-ai/dsh-mcp-client` 的 `insert` 条目
-  （它既不是 skill 也不是 npm 插件，但同样是"这台机器的资产"，不记就迁移不走）。
+- **MCP server 挂载** —— `@deepseek-ai/dsh-mcp-client` 的一条挂载行，**可以挂两层**：
+  profile 的 `cordis.patch.yml` 里的 `insert` 条目（**profile 层** = 常驻，harness 启动即拉起），
+  或 agent preset 的 `agent.cordis.yml` 里的普通行（**preset 层** = 按需，只有新会话选中该 preset
+  才 compose —— preset 是 DSH 里唯一的惰性挂载点）。**层决定进程何时启动，不决定算不算资产。**
+  （它既不是 skill 也不是 npm 插件，但同样是"这台机器的资产"，不记就迁移不走。）
 - **agent preset** —— `$DSH_HOME\.agent-presets\<id>\` 下的一个目录（**用户自己写的**那些）。
   它**不在任何 profile 的 `package.json` / `bundles` 里**，所以换机器会**凭空消失** —— 备份形态是
   `presets\<id>\` 下的整份 composition 副本（见「agent preset 怎么备份」一节）。
@@ -39,7 +42,7 @@ remote = `https://github.com/canglingzhiyue/dsh_skills.git`。换机器时改这
 | `INSTALL.md` | **安装说明**：新环境照着它**按优先级顺序**一节一节装。它是"当前说明"，有错就当场改对（不保旧版） |
 | `plugins\<name>\RECIPE.md` | 已记账插件的**配方**；插件若是自己写的，连源码一起放这里 |
 | `presets\<id>\` | 已记账 **agent preset** 的**整份副本**：`agent.cordis.yml` + `preset.yml` + `README.md`（见「agent preset 怎么备份」一节） |
-| `config\` | **环境配置**：`AGENTS.md`（常驻规则）、`settings.yaml`、`cordis.patch.yml`（MCP 挂载）、`profile\`（`package.json` / `pnpm-workspace.yaml` / `cordis.yml`） |
+| `config\` | **环境配置**：`AGENTS.md`（常驻规则）、`settings.yaml`、`cordis.patch.yml`（profile 补丁层；**只有 profile 层 / 常驻的 MCP 挂载在这里** —— preset 层的 MCP 随 `presets\<id>\` 走）、`profile\`（`package.json` / `pnpm-workspace.yaml` / `cordis.yml`） |
 | `install.ps1` | **一键恢复脚本**：skill + agent preset + 常驻规则 + DSH 设置 + MCP 挂载 + profile 配置 + 插件安装 |
 | `README.md` / `CHANGELOG.md` | 仓库说明 / **变更说明**（每次改了什么、为什么、影响哪些文件） |
 | `archive\` | 历史归档（如 `AGENTS.md` 的旧版本） |
@@ -80,8 +83,9 @@ remote = `https://github.com/canglingzhiyue/dsh_skills.git`。换机器时改这
 - 都不 → **P2**。
 
 安装顺序：**P0 全部先装** → P1（按依赖先后）→ P2（任意）。卸载顺序相反：先 P2/P1，最后 P0。
-**插件与 MCP 的额外要求**：它们都在 profile 的 bundle 层，装完**必须重启 DSH** 才生效；
-所以同优先级下，把它们排在最后装，重启一次即可。
+**插件与 MCP 的额外要求**：插件都在 profile 的 bundle 层，装完**必须重启 DSH** 才生效；
+MCP 看层 —— **profile 层**的同样必须重启，**preset 层**的随 preset 由新会话按需 compose、不必重启
+（但 preset 依赖的 skill 必须先装好）。所以同优先级下，把它们排在最后装，重启一次即可。
 
 新装的条目如果改变了总体顺序规则（例如新增了一个 P0），除了账本与安装说明，还要同步更新
 `$DSH_HOME/AGENTS.md` 常驻规则，必要时更新本 skill 正文。
@@ -144,26 +148,50 @@ robocopy "$env:USERPROFILE\.dsh\skills" "D:\AI_python\skills_backup\skills" `
 
 ## MCP 怎么备份：挂载条目 + 运行时重建配方
 
-MCP server 既不是 skill 也不是 npm 插件 —— 它是一条**普通的 DSH 配置**：写在
-`<profile>\cordis.patch.yml` 里的 `insert` 条目（`name: '@deepseek-ai/dsh-mcp-client'`）。
-它必须被记账，因为**不记就迁移不走**，新环境会少掉这些工具。
+MCP server 既不是 skill 也不是 npm 插件 —— 它是**一条 DSH 配置**：`name: '@deepseek-ai/dsh-mcp-client'`
+的挂载行。它必须被记账，因为**不记就迁移不走**，新环境会少掉这些工具。
 
-账本里给每个 MCP 记一条，并在**「来源」列写它依赖的运行时**。配置文件本身整份备份在
-`config\cordis.patch.yml`（它是所有 MCP 挂载的单一来源，不需要每个 MCP 一个文件）。
+**先分清挂在哪一层，因为备份去向与验证方式都不同：**
+
+| 层 | 写在哪 | 何时启动 | 备份去向 |
+|---|---|---|---|
+| **profile 层（常驻）** | profile 的 `cordis.patch.yml`，包在 `- insert:` 列表里 | harness 启动即拉起 | `config\cordis.patch.yml` |
+| **preset 层（按需）** | agent preset 的 `agent.cordis.yml`，普通行 | 只有新会话选中该 preset 才 startup | 随 `presets\<id>\` 一起（**不需要另存**） |
+
+**preset 层是本机 2026-10-02 起的形态**：4 个逆向 MCP 全部从 profile 层搬进了 `presets\reverse\`。
+动机是 profile 层会让 `dsh web` 一启动就 spawn 全部服务器（实测 10 进程 / 约 300 MB），且
+`dsh-mcp-client` 的 `apply()` 会**同步等待「连接 + `tools/list`」完成**、其 Config schema
+**没有任何懒加载字段**（启动与发现超时直接继承 MCP SDK）—— 所以"按需"只能靠换挂载层，
+而 **preset 是 DSH 里唯一的惰性挂载点**（`dsh-agent-presets` 的 "reading never mounts"）。
+
+⚠️ **换成 preset 层的代价必须一起记**：该 MCP 的工具**只对该 preset 的会话可见**，
+普通会话里根本不存在 —— 不写这一条，新环境会以为工具坏了。
+
+账本里给每个 MCP 记一条，并在**「来源」列写它依赖的运行时**。
 
 一个 MCP 条目的配方要写清：
 
 1. **身份与用途**：`serverName`（工具在会话里以 `mcp__<serverName>__<tool>` 暴露）、干什么用的。
-2. **配置来源**：它活在哪份配置里（本机是 `config\cordis.patch.yml`），原样条目保留。
+2. **挂载层 + 配置来源**：profile 层还是 preset 层；原文条目在哪份配置里（`config\cordis.patch.yml`
+   或 `presets\<id>\agent.cordis.yml`），原样保留。
 3. **依赖的运行时**：`command` / `args` 指向什么 —— 例如 camoufox MCP 指向
    `D:\AI_python\camoufox\.venv\Scripts\python.exe`，jadx MCP 由 `uv` 在
    `D:\AI_python\MCP\MCP合集\jadx-mcp-server` 下启动。
    **运行时体积大、有来源 → 只记重建配方，不备份**（见「配套环境型 skill」）。
 4. **外部前置**：例如 jadx MCP 需要 **JADX-GUI 里装好 `jadx-ai-mcp` 插件并保持开启**
    （默认 `127.0.0.1:8650`）—— 这类"不在本机、也不在仓库"的前置必须写明，否则新环境会一头雾水。
-5. **验证**：重启 DSH 后，会话里应出现 `mcp__<serverName>__*` 工具；`--dump-config` 里应出现该条目。
-   `failOnStartupError: false` 的条目（如 jadx）**启动失败不会报错**，所以要主动验证。
-6. **必须重启 DSH**：MCP 在 profile 启动时组合，不重启不生效。
+5. **凭据**：MCP 若需要 token，**绝不写进配置**（配置文件会进本仓库）—— 用
+   `!!js process.env.<NAME>` 引用，真值放 `$DSH_HOME\.env`（Harness-home 专属层，明确不随仓库传播，
+   **不入账本**），并在配方里写明变量名与"改完要重启 DSH"。注意 `!!js` 的求值环境
+   （`new Function` + `with(ctx)`）**有 `process` 全局、没有 `require`**，所以只能读环境变量。
+6. **验证**：分层的验证方式不同 ——
+   - profile 层：重启 DSH 后会话里出现 `mcp__<serverName>__*`；`dsh --profile <p> --dump-config` 里能看到该条目。
+   - preset 层：**`--dump-config` 看不到**（它只打印 host 组装的树）。改用
+     `reverse-skill-router` 的能力扫描器（它同时扫 profile 与 preset 两层，清单「层」列会标出
+     `preset:<id>`），或新开一个该 preset 的会话看工具列表。
+   `failOnStartupError: false` 的条目（如 jadx / analyzer）**启动失败不会报错**，所以要主动验证。
+7. **何时需要重启 DSH**：profile 层在启动时组合，**必须重启**；preset 层由新会话按需 compose，
+   **不需要重启**（但 `.env` 里的变量只在启动时读取，改了它仍要重启）。
 
 ## agent preset 怎么备份：整份 composition 副本，不是配方
 
@@ -181,12 +209,17 @@ MCP server 既不是 skill 也不是 npm 插件 —— 它是一条**普通的 D
 
 恢复 = 把目录复制回 `$DSH_HOME\.agent-presets\<id>\`，然后：
 
-1. `preset_probe validate <id>` → 期望 `mounted OK`。
-   **roster 里的 `broken: false` 不算验证** —— 它只做形状检查（YAML 能解析、有具名行），
+1. **打开一个该 preset 的新会话** → 挂载成功即工具与 persona 正常。
+   **`preset_probe` 在现行 DSH 里不存在**（它是某个会话里动态定义的 cordis 包，重启即消失、从未落盘）
+   —— 旧版本节写的 `preset_probe validate <id>` 已失效，不要照做。
+   **roster 里的 `broken: false` 也不算验证** —— 它只做形状检查（YAML 能解析、有具名行），
    行引用的包不存在、配置非法、行没激活、服务发布到根 realm 这四种失败它都照过；
+   而**真实挂载失败会让会话创建直接失败并回滚、且指名是哪一行** —— 所以新开会话是最强也最省事的验证。
+   静态复核（可选，能提前抓错）：用 `cordis-plugin-include` 导出的 `entryListSchema` 解析 composition
+   （它就是 Loader 的 YAML 方言），再把每行 `config` 喂给对应插件自己的 Schemastery schema；
 2. 若该 preset 依赖**生成物**（例如逆向模式的能力清单 `$DSH_HOME\reverse\capabilities.md`），
    先跑它的生成脚本，否则 persona 指向的文件不存在；
-3. 新开一个会话选该 preset，确认 persona 与工具列表符合预期（只有真实会话能看出 composition 产出的 agent）。
+3. 确认 persona 生效、工具列表符合预期（只有真实会话能看出 composition 产出的 agent）。
 
 **规则**：
 
@@ -250,7 +283,9 @@ skill 正文出现下列任一情况，就按本节处理：
   如果这个改动会影响新环境重建（例如适配步骤变了），**同时更新 `INSTALL.md` 里该条目的小节**。
 - **插件** → 更新 `plugins\<name>\RECIPE.md`（来源 / 安装命令 / `allowBuilds` 键 / profile 片段变了
   就要改），再追加日志；插件是自写的还要重新复制源码。
-- **MCP** → 更新 `config\cordis.patch.yml` 的副本 + 账本里该行的说明，再追加日志。
+- **MCP** → 看层：**profile 层**更新 `config\cordis.patch.yml` 的副本；**preset 层**的挂载行在
+  `presets\<id>\agent.cordis.yml` 里，随 preset 一起同步（**不需要**另存到 `config\`）。
+  两种都要更新账本里该行的说明，再追加日志。凭据变动只改 `$DSH_HOME\.env`（**不入账本**）。
 - **`config\` 里的任何文件被改**（`AGENTS.md` / `settings.yaml` / profile 配置）→
   重新复制到 `config\`，再追加日志。
 - **不在账本里的东西被改 → 什么都不做**：不补记、不进 `skills\`、不加安装说明小节。
@@ -280,6 +315,11 @@ Copy-Item "$env:USERPROFILE\.dsh\profiles\web\cordis.patch.yml"   "$L\config\cor
 Copy-Item "$env:USERPROFILE\.dsh\profiles\web\package.json"       "$L\config\profile\package.json" -Force
 Copy-Item "$env:USERPROFILE\.dsh\profiles\web\pnpm-workspace.yaml" "$L\config\profile\pnpm-workspace.yaml" -Force
 Copy-Item "$env:USERPROFILE\.dsh\profiles\web\cordis.yml"         "$L\config\profile\cordis.yml" -Force
+# ②b 同步用户自建 agent preset（presets\ ← $DSH_HOME\.agent-presets）—— preset 层的 MCP 挂载在这里
+Get-ChildItem "$env:USERPROFILE\.dsh\.agent-presets" -Directory | ForEach-Object {
+  Copy-Item $_.FullName "$L\presets\" -Recurse -Force
+}
+# ⚠️ 永不复制 .env / .credentials.yaml / 登录态 —— 凭据不进仓库
 
 # ③ 更新 SKILLS.md（追加日志）+ CHANGELOG.md（追加变更说明）
 
@@ -315,8 +355,10 @@ git push
   仓库里那份不在时先找用户要，**不要去网上找同名 skill 顶替**。
 - **插件**：照 `plugins\<name>\RECIPE.md` 的内容写（安装命令、`allowBuilds` 键、profile 片段、
   验证、**必须重启 DSH**），并指回那份配方。
-- **MCP**：写清 `serverName`、它在 `config\cordis.patch.yml` 里的条目、**依赖的运行时怎么重建**、
-  **外部前置**（如需要某个 GUI 工具在跑）、以及"启动失败不会报错"的验证方法。
+- **MCP**：写清 `serverName`、**它挂在哪一层**（profile 的 `cordis.patch.yml`，还是 preset 的
+  `agent.cordis.yml`）、**依赖的运行时怎么重建**、**外部前置**（如需要某个 GUI 工具在跑）、
+  凭据走哪个环境变量，以及分层的验证方法（preset 层 `--dump-config` 看不到；
+  `failOnStartupError: false` 的"启动失败不会报错"）。
 
 安装说明是给"完全没有上下文的新 DSH"看的：写成能照着执行的动作，不要写"参考某处"这类空话。
 **最省事的做法**是让新环境直接跑 `install.ps1`，安装说明只需写它覆盖不到的部分。
@@ -330,7 +372,10 @@ git push
    - skill = `$DSH_HOME/skills` 下的目录；
    - 插件 = `<profile>\package.json` 的 `dependencies` 里**非 `@deepseek-ai/*`** 的条目，
      以及 `dsh.profile.bundles` 里非自带的那些；
-   - **MCP = `<profile>\cordis.patch.yml` 里 `name: '@deepseek-ai/dsh-mcp-client'` 的 `insert` 条目**；
+   - **MCP = `name: '@deepseek-ai/dsh-mcp-client'` 的挂载行 —— 两层都算**：
+     **profile 层**在 `<profile>\cordis.patch.yml` 里包成 `insert` 条目（常驻）；
+     **preset 层**在 `$DSH_HOME\.agent-presets\<id>\agent.cordis.yml` 里是普通行（按需）。
+     账本与配置里都要写明层，因为备份去向与验证方式不同（见「MCP 怎么备份」一节）；
    - **agent preset = `$DSH_HOME\.agent-presets\` 下的目录**（凡是用户自己写在那里的，
      都不在任何 profile 配置里 —— 漏记就等于新环境没有这个模式）。
    发现没记账的（用户手动装的、第三方装的）→ 一并补记；分不清是否自带的 → 问用户。
@@ -349,7 +394,7 @@ git push
 | 名称 | 用户口中或来源里的名字（仓库名即可）；**是插件就标注「DSH 插件」**，是 MCP 就标注「MCP」，是 **agent preset 就标注「agent preset」**（并写上会话选择器里的显示名），是 skill 可不标 |
 | 优先级 | `P0 治理类` / `P1 依赖类` / `P2 独立类`（判定见上） |
 | 来源 | GitHub 仓库 URL、ClawHub 名称；**没来源写 `本地自制（唯一副本在 skills/<name>/）`**；推不出来写 `未知（本地）`，**绝不编造**。**MCP 这一列写它依赖的运行时**（如 `camoufox MCP ← D:\AI_python\camoufox`） |
-| 适配 | 来源不是 DSH 原生格式时必写：`需按 DSH 模式定制修改 —— SKILL.md frontmatter 只留 name/description（≤500 字符）、命令说明改用 /name 调用、子代理规则写进 subagent prompt`；本身就是 DSH skill 则写 `DSH 原生，复制 skills/<name>/ 即可`；**插件写安装命令与前置，并指向 `plugins\<name>\RECIPE.md`**；**MCP 写它的 `serverName` 与在 `config\cordis.patch.yml` 里的条目、外部前置、验证方式**；**preset 写它依赖哪些 skill（按顺序）、有没有必须先跑的生成物脚本、验证命令，并指向 `presets\<id>\README.md`** |
+| 适配 | 来源不是 DSH 原生格式时必写：`需按 DSH 模式定制修改 —— SKILL.md frontmatter 只留 name/description（≤500 字符）、命令说明改用 /name 调用、子代理规则写进 subagent prompt`；本身就是 DSH skill 则写 `DSH 原生，复制 skills/<name>/ 即可`；**插件写安装命令与前置，并指向 `plugins\<name>\RECIPE.md`**；**MCP 写它的 `serverName`、挂在哪一层（profile 层 `config\cordis.patch.yml` / preset 层 `presets\<id>\agent.cordis.yml`）、外部前置、凭据环境变量、分层验证方式**；**preset 写它依赖哪些 skill（按顺序）、有没有必须先跑的生成物脚本、验证方式（新开会话实测；`preset_probe` 已不存在），并指向 `presets\<id>\README.md`** |
 | 记录日期 | `YYYY-MM-DD` |
 
 日志一行说清这次做了什么：装/改了哪个来源、带了几个 skill / 插件 / MCP、同步了哪些目录、优先级变化、删掉了什么。

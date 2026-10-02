@@ -14,6 +14,74 @@
 
 ---
 
+## 2026-10-02 — 4 个 MCP 从 profile 层移入 agent preset `reverse`：由「启动即拉起」改为「按需启动」
+
+### 变更类型
+
+配置迁移（MCP 挂载层变化）+ 凭据硬化 + 扫描器修复 + 已记账条目修改（`reverse` preset、`reverse-skill-router`）+ 文档勘误
+
+### 内容
+
+**起因**：用户反馈「看到 dsh web 启动的时候还启动了其他 mcp 服务，这会导致服务卡死和空闲，
+mcp 应该在需要用到的时候启动才对」。先调查后动手，用户在三个方案里选定「移入『逆向模式』preset」。
+
+- **先查清成因（实测，不含推断）**：`dsh web`（pid 25184）直接 spawn 3 条常驻 stdio 链
+  （camoufox / jadx / ida），**10 个进程、约 300 MB**，启动后 9~13 秒内全部拉起；
+  空闲 CPU 8 秒采样增量为 **0** —— 所以「空闲」是常驻内存，「卡」在启动期，根源是
+  `dsh-mcp-client` 的 `apply()` **同步等待「连接 + `tools/list`」完成**才激活，
+  且其 Config schema **没有任何懒加载字段**、超时继承 MCP SDK（各 60 s）。
+  → **结论：没有配置级的按需开关，只能换挂载层。**
+- **迁移**：4 段 `insert` 原样搬到 `presets\reverse\agent.cordis.yml`。依据是
+  `dsh-agent-presets` 的 **"reading never mounts"** —— preset 是 DSH 里唯一的惰性挂载点
+  （读文件只解析不 compose，只有新会话选中才挂载）。4 行只注册工具、不 `provide` 服务，
+  因此**无需 `isolate` realm**。
+- **实测结果**：改完 profile patch 后借 `patchReload: live` 热加载，**MCP 进程 10 → 0**；
+  `dsh web` 存活（HTTP 401 = 浏览器信任围栏，正常）；`--dump-config` exit 0、无 mcp-client 行、无报错。
+  能力清单复测：4 条 MCP 全部标为 `preset:reverse`。
+- **语义变化（代价，已在文档中明示）**：**普通会话不再有 `mcp__*` 工具**，
+  要调用必须先新开「逆向模式」会话；开该会话时要等服务器连上。
+  `config\cordis.patch.yml` 因此变为空 `[]` + 说明注释（留作改回常驻的对照）。
+- **凭据硬化（顺带修掉一处旧隐患）**：analyzer 的 `Authorization: Bearer <token>` 原先
+  **明文写在 `config\cordis.patch.yml` 里并随备份进私有仓库**（旧账本以「泄漏面仅限本机
+  23816 端口」为由接受）。现改为 `!!js process.env.ANALYZER_MCP_TOKEN` 引用
+  （`!!js` 求值是 `new Function` + `with(ctx)`，**有 `process` 无 `require`**，
+  只能读环境变量），真值移入 `$DSH_HOME\.env` —— **该文件不入仓库**。
+- **扫描器修复（关键连带影响）**：`scan-capabilities.ps1` 原先**只扫 profile 的
+  `cordis.patch.yml`**，MCP 搬家后会**静默漏报全部 MCP** —— 而它是逆向模式「唯一事实源」。
+  已扩为 **profile 层 + preset 层双扫描**，清单新增「层」列，并修正按需语义下的告警文案
+  （preset 层 MCP 未监听**属正常态**，不再误报「前置未就绪」）。
+- **文档勘误**：账本与 INSTALL.md 多处引用的 **`preset_probe` 工具在本机已不存在**
+  （旧会话动态定义的 cordis 包，重启即消失、从未落盘）。相关验证步骤改为
+  「能力扫描器 + 新开会话实测」；旧行按只追加原则保留原文并就地标注失效。
+- **验证方式变化**：`dsh --profile web --dump-config` **看不到 preset 里的行**了。
+
+### 影响文件
+
+| 文件 | 改动 |
+|---|---|
+| `config\cordis.patch.yml` | 4 段 MCP `insert` 移除（现为空 `[]` + 说明注释）；analyzer 明文 token 一并移除 |
+| `config\settings.yaml` | **顺带修复一处旧缺陷**：备份里一直是 2 行残桩（只有 `ui-onboarding`），live 实为 90 行；本次按实同步（已确认只含 `apiKeyEnv` 环境变量名，无明文密钥） |
+| `presets\reverse\agent.cordis.yml` | 新增 4 段 MCP 挂载（含 `!!js` token 引用）；顶部设计声明与 `python` 例外说明更新 |
+| `presets\reverse\README.md` | 重写：MCP 段落、"不需要 realm"表述、`preset_probe` 失效说明、恢复步骤 |
+| `skills\reverse-skill-router\scripts\scan-capabilities.ps1` | profile + preset 双层扫描、`Read-McpFromFile` 抽取、清单「层」列、告警文案修正 |
+| `SKILLS.md` | 4 条 MCP 行 + `reverse` preset 行就地追加迁移注记；「安装顺序」新增 2026-10-02 补记；追加日志 |
+| `INSTALL.md` | MCP 节重写（两层对比表 + 改回常驻指引 + 验证方式变化）、preset 节验证步骤与凭据步、安装顺序、analyzer 凭据段与交叉引用 |
+| `CHANGELOG.md` | 本条 |
+| `$DSH_HOME\.env`（**不入仓库**） | 新增 `ANALYZER_MCP_TOKEN`；`.env` 只在启动时读取，需重启 DSH |
+
+### 回退
+
+`git revert` 本条即可恢复 profile 层挂载；或手工把 `presets\reverse\agent.cordis.yml`
+末尾 4 段搬回 `config\cordis.patch.yml` 并包进 `- insert:`（analyzer 的 headers 需改回明文形式）。
+
+### 未完成
+
+- **「逆向模式」会话能拉起这 4 个 MCP 尚未实测** —— preset 只有被新会话选中才 compose，
+  需用户新开一个逆向模式会话确认 `mcp__*` 工具出现（挂载失败会让会话创建直接报错，不会静默半组装）。
+- `ANALYZER_MCP_TOKEN` 需**重启 DSH** 才对 analyzer 生效（当前 `authEnabled: false`，不影响连通）。
+
+---
+
 ## 2026-09-30 — 接入 Anything Analyzer：新增 `protocol` 域 + 抓包/协议分析能力（skill + MCP 各一条）
 
 ### 变更类型

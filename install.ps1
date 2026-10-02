@@ -1,4 +1,4 @@
-<#
+﻿<#
   install.ps1 —— 从 dsh_skills 仓库一键恢复 DSH 环境（skill + MCP + 第三方插件 + 常驻规则）
 
   用法：
@@ -7,7 +7,8 @@
     pwsh -File install.ps1 -SkipPlugins     # 跳过插件安装（没有 pnpm/网络时）
     pwsh -File install.ps1 -DshHome D:\x\.dsh -Profile web
 
-  做得到的：skill 内容、常驻规则、DSH 设置、MCP 挂载、profile 配置、第三方插件安装。
+  做得到的：skill 内容、常驻规则、DSH 设置、profile 配置、agent preset（**4 个 MCP 的挂载就在
+  presets\reverse\ 里**，2026-10-02 起从 profile 层移入，按需启动）、第三方插件安装。
   做不到的：各 skill 背后的运行时（GB 级，需联网重建）与登录态 —— 见脚本末尾的待办清单。
   永不恢复：凭据（.credentials.yaml）、登录 session —— 需人工填。
 
@@ -125,7 +126,8 @@ if (-not $SkipPresets) {
       Ok "preset $id（$((Get-ChildItem -Recurse $s -File).Count) 文件）"
     }
     Warn 'preset 只是 composition：它引用的 skill 必须先装好'
-    Warn '装完用 preset_probe validate <id> 验证挂载（roster 的 broken:false 不算验证）'
+    Warn '本机 4 个逆向 MCP 的挂载就在 presets\reverse\ 里 —— 装 preset 即装好 MCP（按需启动）'
+    Warn '验证挂载请新开一个该 preset 的会话（preset_probe 已不存在）；roster 的 broken:false 不算验证'
     Warn '逆向模式的 persona 第一步要读 $DSH_HOME\reverse\capabilities.md —— 需跑一次 scan-capabilities.ps1 生成它'
   }
 } else { Step '2b' '恢复 agent preset —— 已跳过' }
@@ -147,10 +149,23 @@ if (-not $SkipConfig) {
   Copy-IfChanged (Join-Path $Root 'config\profile\package.json')        (Join-Path $profileDir 'package.json')
   Copy-IfChanged (Join-Path $Root 'config\profile\pnpm-workspace.yaml') (Join-Path $profileDir 'pnpm-workspace.yaml')
   Copy-IfChanged (Join-Path $Root 'config\profile\cordis.yml')          (Join-Path $profileDir 'cordis.yml')
-  $mcp = (Select-String -Path (Join-Path $Root 'config\cordis.patch.yml') -Pattern 'serverName:\s*(\S+)' -AllMatches).Matches |
-         ForEach-Object { $_.Groups[1].Value }
-  Ok "MCP 挂载：$($mcp -join '、')"
+  # MCP 挂载现在有两层：profile（常驻）与 agent preset（按需）。两层都要报，
+  # 否则 2026-10-02 迁移后这里会显示"一个都没有"。
+  $mcpSources = @()
+  $profilePatch = Join-Path $Root 'config\cordis.patch.yml'
+  if (Test-Path $profilePatch) { $mcpSources += $profilePatch }
+  $presetsDir = Join-Path $Root 'presets'
+  if (Test-Path $presetsDir) { $mcpSources += @(Get-ChildItem $presetsDir -Recurse -Filter 'agent.cordis.yml' -File | Select-Object -ExpandProperty FullName) }
+  $mcp = @()
+  foreach ($src in $mcpSources) {
+    $layer = if ($src -eq $profilePatch) { 'profile/常驻' } else { "preset/按需($(Split-Path (Split-Path $src -Parent) -Leaf))" }
+    $names = (Select-String -Path $src -Pattern 'serverName:\s*''?([A-Za-z0-9_\-]+)' -AllMatches).Matches |
+             ForEach-Object { $_.Groups[1].Value }
+    foreach ($n in $names) { $mcp += "$n [$layer]" }
+  }
+  if ($mcp.Count -gt 0) { Ok "MCP 挂载：$($mcp -join '、')" } else { Warn '没扫到任何 MCP 挂载 —— 检查 config 与 presets' }
   Warn '这些 MCP 依赖外部运行时（如 D:\AI_python\camoufox、jadx-mcp-server）—— 见末尾待办'
+  Warn 'preset 层的是按需启动：只有新开该 preset 的会话才会拉起；普通会话看不到这些 mcp__* 工具'
 } else { Step 4 '恢复 MCP/profile —— 已跳过' }
 
 # ---------------------------------------------------------------- 5. 第三方插件
@@ -207,10 +222,14 @@ Write-Host @'
   3) 登录态（永不进仓库）
        camoufox 的 states\ / profiles\ —— 需要重新登录目标站点
   4) 检查并修改硬编码路径
-       config\cordis.patch.yml 里的 D:\AI_python\... 路径
+       presets\reverse\agent.cordis.yml 里的 D:\AI_python\... 路径（4 个 MCP 的 command/args 都在这）
        AGENTS.md 顶部的「账本目录」路径
        settings.yaml 里的 provider / baseURL
-  5) 重启 DSH —— 插件与 MCP 在启动时组合（MCP 随 profile 补丁；patchReload:live 时补丁热加载，插件目录类改动需重启）
+  4b) analyzer 的凭据（可选，仅在启用鉴权时需要）
+       $DSH_HOME\.env 里加 ANALYZER_MCP_TOKEN=<token>（取自 %APPDATA%\anything-analyzer\
+       mcp-server-config.json 的 authToken）。**不入仓库**；.env 只在启动时读取 → 需重启 DSH
+  5) 重启 DSH —— 插件在启动时组合（MCP 现在挂在 agent preset 里 = 按需，不需要重启就生效；
+     profile 补丁 patchReload:live 时热加载；插件目录类改动仍需重启）
 '@ -ForegroundColor Gray
 
 Write-Host "`n完成（自动部分）。" -ForegroundColor White

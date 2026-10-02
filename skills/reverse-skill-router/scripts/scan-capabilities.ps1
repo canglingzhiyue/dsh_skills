@@ -164,35 +164,71 @@ foreach ($s in $specs) {
     $tools += $entry
 }
 
-# ── 2. MCP 挂载（从 profile 的 cordis.patch.yml 解析） ──────────────────────
+# ── 2. MCP 挂载（从 profile 的 cordis.patch.yml + agent preset 的 composition 解析） ──
+#
+# MCP 能挂在两层，**语义完全不同，必须分开标注**：
+#   - profile 层（host 组装）：`dsh web` 一启动就 spawn 全部服务器，所有会话都能
+#     看到它的工具 —— 代价是常驻进程与启动期同步等待（dsh-mcp-client 的 apply()
+#     要等「连接 + tools/list」完成，且没有懒加载配置项）。layer = 'profile'。
+#   - agent preset 层：只有**新会话真的选中该 preset** 时才 compose（`dsh-agent-presets`
+#     的 "reading never mounts" —— preset 是 DSH 里唯一的惰性挂载点），所以进程
+#     按需启动，工具也只对该 preset 的会话可见。layer = 'preset'。
+#
+# 2026-10-02 起本机 4 个逆向 MCP 全部从 profile 层移入 preset `reverse`：
+# 于是 `dsh web` 启动与普通会话零 MCP 进程，只有「逆向模式」会话才拉起它们。
+# 用工具前先看**层**这一列 —— preset 层的 MCP 在普通会话里根本不存在，
+# 要调用它必须先新开一个逆向模式会话。
 
 $mcpPorts = @{ 'jadx' = 8650; 'ida' = 0; 'camoufox' = 0; 'analyzer' = 23816 }
+
+function Read-McpFromFile {
+    <#
+      解析一个 composition 文件里的 dsh-mcp-client 条目。
+      只认「出现 serverName: 之后紧邻的缩进键」，所以同文件里别的列表项不会误入。
+    #>
+    param([string]$Path, [string]$Layer, [string]$Owner)
+    $found = @()
+    if (-not (Test-Path -LiteralPath $Path)) { return $found }
+    $cur = $null
+    foreach ($ln in @(Get-Content -LiteralPath $Path -ErrorAction SilentlyContinue)) {
+        if ($ln -match 'serverName:\s*''?([A-Za-z0-9_\-]+)''?') {
+            if ($cur) { $found += $cur }
+            $cur = [ordered]@{
+                serverName = $Matches[1]; layer = $Layer; owner = $Owner
+                profile = $(if ($Layer -eq 'profile') { $Owner } else { $null })
+                preset = $(if ($Layer -eq 'preset') { $Owner } else { $null })
+                command = $null; transport = $null; url = $null
+                args = @(); timeoutMs = $null; failOnStartupError = $null
+                externalPrerequisite = $null; probe = $null
+            }
+            continue
+        }
+        if (-not $cur) { continue }
+        # 遇到下一个顶层条目（`- id:` / `- name:`）说明本行已结束
+        if ($ln -match '^-\s+(id|name):') { $found += $cur; $cur = $null; continue }
+        if ($ln -match 'transport:\s*''?([A-Za-z\-]+)''?\s*$') { $cur.transport = $Matches[1].Trim(); continue }
+        if ($ln -match 'url:\s*''?([^''\r\n]+?)''?\s*$') { $cur.url = $Matches[1].Trim(); continue }
+        if ($ln -match 'command:\s*''?([^''\r\n]+?)''?\s*$') { $cur.command = $Matches[1].Trim(); continue }
+        if ($ln -match '^\s+-\s+''?([^'':\r\n]+?)''?\s*$') { $cur.args += $Matches[1].Trim(); continue }
+        if ($ln -match 'toolCallTimeoutMs:\s*(\d+)') { $cur.timeoutMs = [int]$Matches[1]; continue }
+        if ($ln -match 'failOnStartupError:\s*(\S+)') { $cur.failOnStartupError = $Matches[1]; continue }
+    }
+    if ($cur) { $found += $cur }
+    return $found
+}
+
 $mcp = @()
+# profile 层：host 组装，启动即拉起
 if (Test-Path -LiteralPath $ProfilesRoot) {
     foreach ($prof in @(Get-ChildItem -LiteralPath $ProfilesRoot -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'node_modules' })) {
-        $patch = Join-Path $prof.FullName 'cordis.patch.yml'
-        if (-not (Test-Path -LiteralPath $patch)) { continue }
-        $cur = $null
-        foreach ($ln in @(Get-Content -LiteralPath $patch -ErrorAction SilentlyContinue)) {
-            if ($ln -match 'serverName:\s*''?([A-Za-z0-9_\-]+)''?') {
-                if ($cur) { $mcp += $cur }
-                $cur = [ordered]@{
-                    profile = $prof.Name; serverName = $Matches[1]; command = $null
-                    transport = $null; url = $null
-                    args = @(); timeoutMs = $null; failOnStartupError = $null
-                    externalPrerequisite = $null; probe = $null
-                }
-                continue
-            }
-            if (-not $cur) { continue }
-            if ($ln -match 'transport:\s*''?([A-Za-z\-]+)''?\s*$') { $cur.transport = $Matches[1].Trim(); continue }
-            if ($ln -match 'url:\s*''?([^''\r\n]+?)''?\s*$') { $cur.url = $Matches[1].Trim(); continue }
-            if ($ln -match 'command:\s*''?([^''\r\n]+?)''?\s*$') { $cur.command = $Matches[1].Trim(); continue }
-            if ($ln -match '^\s+-\s+''?([^'':\r\n]+?)''?\s*$') { $cur.args += $Matches[1].Trim(); continue }
-            if ($ln -match 'toolCallTimeoutMs:\s*(\d+)') { $cur.timeoutMs = [int]$Matches[1]; continue }
-            if ($ln -match 'failOnStartupError:\s*(\S+)') { $cur.failOnStartupError = $Matches[1]; continue }
-        }
-        if ($cur) { $mcp += $cur }
+        $mcp += Read-McpFromFile -Path (Join-Path $prof.FullName 'cordis.patch.yml') -Layer 'profile' -Owner $prof.Name
+    }
+}
+# preset 层：按需，只在选中该 preset 的新会话里存在
+$AgentsRoot = Join-Path $DshHome '.agent-presets'
+if (Test-Path -LiteralPath $AgentsRoot) {
+    foreach ($preset in @(Get-ChildItem -LiteralPath $AgentsRoot -Directory -ErrorAction SilentlyContinue)) {
+        $mcp += Read-McpFromFile -Path (Join-Path $preset.FullName 'agent.cordis.yml') -Layer 'preset' -Owner $preset.Name
     }
 }
 
@@ -323,10 +359,16 @@ foreach ($t in $tools) {
 }
 foreach ($m in $mcp) {
     if ($m.probe -match 'listening = False') {
-        $warnings += "MCP [$($m.serverName)] 外部前置未就绪：$($m.externalPrerequisite)"
+        # preset 层的 MCP 是**按需**的：没有逆向模式会话在跑时，它的进程本来就不该存在
+        # —— 端口没监听是正常态，不是故障。只有 profile（常驻）层才说明前置真的缺失。
+        $suffix = if ($m.layer -eq 'preset') {
+            "（注意：该 MCP 挂在 preset ``$($m.preset)``，属**按需**启动 —— 没有逆向模式会话在跑时它本就不该监听，此告警属正常态；先新建/使用一个逆向模式会话再复测）"
+        } else { '' }
+        $warnings += "MCP [$($m.serverName)] 外部前置未就绪：$($m.externalPrerequisite)$suffix"
     }
     if ($m.failOnStartupError -eq 'false') {
-        $warnings += "MCP [$($m.serverName)] 配了 failOnStartupError: false —— 前置缺失时它静默失效，用工具前先探活"
+        $where = if ($m.layer -eq 'preset') { "preset ``$($m.preset)``，按需" } else { 'profile 层，常驻' }
+        $warnings += "MCP [$($m.serverName)]（$where）配了 failOnStartupError: false —— 前置缺失时它静默失效，用工具前先探活"
     }
 }
 if ($dangling.Count -gt 0) { $warnings += "存在悬空技能引用 $($dangling.Count) 条（见 danglingReferences）" }
@@ -373,13 +415,18 @@ $md.Add("- MCP: $(@($mcp).Count) ｜ 技能: $(@($skills).Count) ｜ 插件: $(@
 $md.Add('')
 $md.Add('## 1. MCP 服务器（模型可直接调用）')
 $md.Add('')
-$md.Add('| serverName | profile | command | 外部前置 | 探测 |')
-$md.Add('|---|---|---|---|---|')
+$md.Add('> **先看「层」这一列**：`profile` = 常驻（`dsh web` 启动即拉起，所有会话可见）；')
+$md.Add('> `preset:<id>` = **按需**（只有选中该 preset 的新会话才 compose，普通会话里不存在这组工具）。')
+$md.Add('')
+$md.Add('| serverName | 层 | 归属 | command | 外部前置 | 探测 |')
+$md.Add('|---|---|---|---|---|---|')
 foreach ($m in $mcp) {
     $probeText = if ([string]::IsNullOrWhiteSpace($m.probe)) { '-' } else { $m.probe }
     # stdio 挂载显示 command；streamable-http 挂载没有 command，显示 url
     $cmdText = if ($m.command) { $m.command } elseif ($m.url) { "$($m.transport) $($m.url)" } else { '' }
-    $md.Add("| ``$($m.serverName)`` | $($m.profile) | ``$cmdText`` | $($m.externalPrerequisite) | $probeText |")
+    $layerText = if ($m.layer -eq 'preset') { "preset:$($m.preset)" } else { 'profile（常驻）' }
+    $ownerText = if ($m.layer -eq 'preset') { '预设会话' } else { $m.profile }
+    $md.Add("| ``$($m.serverName)`` | $layerText | $ownerText | ``$cmdText`` | $($m.externalPrerequisite) | $probeText |")
 }
 $md.Add('')
 $md.Add('## 2. 本机工具')

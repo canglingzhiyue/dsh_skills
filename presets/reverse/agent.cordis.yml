@@ -1,12 +1,20 @@
 # The `reverse` agent preset — 逆向模式. Authored from the shipped `standard`
 # composition (the full coding agent) plus a reverse-engineering persona.
 #
-# Design: the preset carries IDENTITY and HARD RULES only. Platform capability
-# (what is installed, which MCP server answers, which emulator is up) lives in a
-# generated capability manifest at `$DSH_HOME\reverse\capabilities.md`, and the
-# per-domain procedure lives in the `reverse-skill-router` skill. That split is
-# what makes "install a new tool, rescan, the mode knows it" work without
+# Design: the preset carries IDENTITY, HARD RULES, and the MOUNT LINES for the
+# reverse-engineering MCP servers this mode needs. Platform capability (what is
+# installed, which MCP server is actually reachable, which emulator is up) lives
+# in a generated capability manifest at `$DSH_HOME\reverse\capabilities.md`, and
+# the per-domain procedure lives in the `reverse-skill-router` skill. That split
+# is what makes "install a new tool, rescan, the mode knows it" work without
 # editing this file — the composition never encodes machine state.
+#
+# The exception is the MCP section at the bottom, and it is a deliberate one:
+# those 4 rows do pin install paths, because a mount line IS a path. What they
+# do NOT do is decide what is available — `failOnStartupError: false` plus the
+# capability manifest still own that. So the rule survives in its useful form:
+# adding a tool never needs this file edited; moving where an MCP server lives
+# from does. See that section's own comment for why they live here at all.
 #
 # This file is an AGENT-PLANE composition. The roster mounts it ONCE under a
 # standing scope; every session naming it joins by scope parentage, so the
@@ -292,3 +300,91 @@
 
 - id: present
   name: '@deepseek-ai/dsh-tool-present'
+
+# ── 逆向 MCP（挂在这里 = 按需启动） ─────────────────────────────────────────
+#
+# 这 4 行原先挂在 profile 的 host 层（`profiles\web\cordis.patch.yml`），后果是
+# `dsh web` 一启动就 spawn 全部 MCP 服务器：3 条 stdio 链共 10 个进程、约 300 MB
+# 常驻；而 `dsh-mcp-client` 的 `apply()` 会**同步等待「连接 + tools/list」完成**
+# 才让条目激活，且它的 Config schema 里没有任何懒加载字段、启动与发现超时又直接
+# 继承 MCP SDK —— 启动期的卡顿主要来自这里，且无法靠配置消除。
+#
+# 挂进 preset 是利用 DSH 唯一的惰性挂载点：preset 只在**新会话真的选中它**时才
+# compose（`dsh-agent-presets` 的「reading never mounts」）。于是 `dsh web` 启动
+# 与普通会话零 MCP 进程，只有新开一个「逆向模式」会话才拉起它们。
+#
+# 代价（明确的取舍）：普通会话不再有 `mcp__camoufox__*` / `mcp__jadx__*` /
+# `mcp__ida__*` / `mcp__analyzer__*`。逆向工具本来就只服务本 preset 的域。
+# 另一个代价：新建逆向模式会话时要等这几台服务器连上（camoufox 冷启动最慢），
+# 这是把启动开销从「每次 `dsh web`」换成「每次开逆向会话」的必然结果。
+#
+# 这 4 行只往 `ctx.tools` 注册工具、不 `provide` 任何服务，所以和上面的
+# `tool-fs` / `tool-pwsh` 一样**不需要** `isolate` realm —— 不要给它们套 group。
+#
+# `failOnStartupError: false` 沿用原值：前置缺失（JADX-GUI 没开、Analyzer GUI 没开
+# 等）时**静默失效不报错**，所以用工具前先按 `reverse-skill-router` 的能力清单探活。
+
+- id: mcp-camoufox-reverse
+  name: '@deepseek-ai/dsh-mcp-client'
+  config:
+    serverName: camoufox
+    transport: stdio
+    command: 'D:\AI_python\camoufox\.venv\Scripts\python.exe'
+    args:
+      - '-m'
+      - 'camoufox_reverse_mcp'
+      - '--locale'
+      - 'zh-CN'
+    env:
+      PYTHONUTF8: '1'
+      PYTHONIOENCODING: 'utf-8'
+    toolCallTimeoutMs: 120000
+
+- id: mcp-jadx
+  name: '@deepseek-ai/dsh-mcp-client'
+  config:
+    serverName: jadx
+    transport: stdio
+    command: 'C:\Users\y\.local\bin\uv.exe'
+    args:
+      - '--directory'
+      - 'D:\AI_python\MCP\MCP合集\jadx-mcp-server'
+      - 'run'
+      - 'jadx_mcp_server.py'
+    env:
+      PYTHONUTF8: '1'
+      PYTHONIOENCODING: 'utf-8'
+    toolCallTimeoutMs: 120000
+    failOnStartupError: false
+
+- id: mcp-ida
+  name: '@deepseek-ai/dsh-mcp-client'
+  config:
+    serverName: ida
+    transport: stdio
+    command: 'C:\Users\y\.local\bin\uvx.exe'
+    args:
+      - '--exclude-newer=1s'
+      - 'ida-mcp'
+      - 'stdio'
+      - '--agent=dsh'
+    env:
+      PYTHONUTF8: '1'
+      PYTHONIOENCODING: 'utf-8'
+    toolCallTimeoutMs: 600000
+
+# 凭据不进 composition、更不进备份：`$DSH_HOME\.env` 是 DSH 专属加载的 Harness-home
+# 层（`loadLayeredEnv` 把它物化进 `process.env`），且明确不随任何仓库传播 —— 这正是
+# 能写在这里的前提。`!!js` 求值发生在 Loader 的 config 插值里，可用 `process` 全局
+# （无 `require`），所以只能读环境变量，不能直接读 %APPDATA% 的配置文件。
+# 未设 `ANALYZER_MCP_TOKEN` 时不发 Authorization 头：本机 `authEnabled: false`，
+# 照样可用；一旦启用鉴权，把 token 写进 `.env` 并重启 DSH（.env 只在启动时读取）。
+- id: mcp-anything-analyzer
+  name: '@deepseek-ai/dsh-mcp-client'
+  config:
+    serverName: analyzer
+    transport: streamable-http
+    url: 'http://127.0.0.1:23816/mcp'
+    headers: !!js "process.env.ANALYZER_MCP_TOKEN ? { Authorization: 'Bearer ' + process.env.ANALYZER_MCP_TOKEN } : {}"
+    toolCallTimeoutMs: 180000
+    failOnStartupError: false

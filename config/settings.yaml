@@ -1,2 +1,90 @@
+llm-pi-ai:
+  providers:
+    claudex:
+      displayName: claudex
+      apiKeyEnv: CLAUDEX_API_KEY
+      api: openai-completions
+      baseURL: https://claudex.org/v1
+      models:
+        - id: deepseek-v4.1-flash
+          name: deepseek-v4.1-flash
+          # 实测（2026-10-02）：该站此模型对 reasoning_effort / thinking 全部无响应，
+          # 上游未开启思考，故声明为非推理模型（选择器不显示等级）。
+          reasoningEfforts: false
+        - id: deepseek-v4-pro
+          name: deepseek-v4-pro
+          # 实测：reasoning_effort=high/max 能真正触发思考（基线不思考）。
+          # off 留空 = 不发送该字段，即"不干预"，避免个别上游把 none 当作开启。
+          reasoningEfforts:
+            off:
+            high: high
+            max: max
+    a-lang:
+      displayName: alang
+      apiKeyEnv: A_LANG_API_KEY
+      api: openai-completions
+      baseURL: https://langlangya.dpdns.org/v1
+      models:
+        - id: deepseek-v4.1-flash
+          name: deepseek-v4.1-flash
+          # 实测：off(none) 可关闭思考；low/medium/high/max 逐级生效。
+          reasoningEfforts:
+            off: 'none'
+            low: low
+            medium: medium
+            high: high
+            max: max
+        - id: glm-5.3-flash
+          name: glm-5.3-flash
+          # 实测：仅 high/max 真正思考，其余档位等价于关闭，故只声明三档。
+          reasoningEfforts:
+            off: 'none'
+            high: high
+            max: max
+    lesec:
+      displayName: lesec
+      apiKeyEnv: LESEC_API_KEY
+      api: openai-completions
+      baseURL: https://ai.lesec.top/v1
+      models:
+        # 注意：该站当前返回 403（无有效订阅），以下档位是按同款模型推断，
+        # 订阅恢复后需按实测校正。
+        - id: cn:deepseek-v4.1-flash
+          name: cn:deepseek-v4.1-flash
+          reasoningEfforts:
+            off: 'none'
+            low: low
+            medium: medium
+            high: high
+            max: max
+        - id: deepseek-v4.1-flash
+          name: deepseek-v4.1-flash
+          reasoningEfforts:
+            off: 'none'
+            low: low
+            medium: medium
+            high: high
+            max: max
+    ok88:
+      displayName: 88ok
+      apiKeyEnv: OK88_API_KEY
+      api: openai-completions
+      baseURL: https://8888ok.cc/v1
+      models:
+        # 注意：该站当前返回 403（SUBSCRIPTION_NOT_FOUND），档位为推断值。
+        - id: deepseek-v4.1-flash
+          name: deepseek-v4.1-flash
+          reasoningEfforts:
+            off: 'none'
+            low: low
+            medium: medium
+            high: high
+            max: max
+agent-default-model:
+  provider: a-lang
+  model: deepseek-v4.1-flash
+  reasoningEffort: high
 ui-onboarding:
   welcomeNoticeVersion: 2026-08-13.1
+ui-conversation:
+  busyEnter: steer

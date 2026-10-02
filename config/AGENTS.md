@@ -16,9 +16,12 @@ remote = `https://github.com/canglingzhiyue/dsh_skills.git`。
   profile snippets + verification); a self-written plugin also gets its source copied here.
 - `presets\<id>\` — a recorded **agent preset**, copied verbatim: `agent.cordis.yml` + `preset.yml`
   + a `README.md` naming the skills it references. Restore = copy the directory back into
-  `$DSH_HOME\.agent-presets\<id>\`, then `preset_probe validate <id>`.
+  `$DSH_HOME\.agent-presets\<id>\`, then verify by opening a new session on that preset
+  (**`preset_probe` does not exist in current DSH** — it was a session-authored dynamic package).
 - `config\` — environment config: `AGENTS.md` (these global rules), `settings.yaml`,
-  `cordis.patch.yml` (**MCP mounts**), and `profile\` (`package.json` / `pnpm-workspace.yaml` / `cordis.yml`).
+  `cordis.patch.yml` (profile patch layer — **MCP mounts live here only when they are profile-layer /
+  always-on**; since 2026-10-02 this deployment's 4 MCPs are rows in `presets\reverse\` instead),
+  and `profile\` (`package.json` / `pnpm-workspace.yaml` / `cordis.yml`).
 - `install.ps1` — the one-shot restore script (skills + presets + rules + settings + MCP + plugins).
 - `README.md` / `CHANGELOG.md` — repo guide / **change log** (what changed, why, which files).
 
@@ -28,7 +31,9 @@ Rules:
   installs, things the user installed by hand, and things you installed for them. **Four kinds** qualify: a
   **skill** (a directory under `$DSH_HOME/skills`), a **DSH plugin** (a non-`@deepseek-ai/*` entry in a
   profile's `dependencies` or `dsh.profile.bundles`), an **MCP mount** (a `@deepseek-ai/dsh-mcp-client`
-  `insert` entry in the profile's `cordis.patch.yml`), and an **agent preset** (a directory under
+  `insert` entry in a profile's `cordis.patch.yml`, **or a `dsh-mcp-client` row in an agent preset's
+  `agent.cordis.yml`** — the layer decides *when* the server starts, not whether it counts), and an
+  **agent preset** (a directory under
   `$DSH_HOME\.agent-presets\<id>\` — it is in **no** profile's `package.json`, so it does not migrate by
   itself and would otherwise vanish on a new machine). Never recorded or backed up: DSH's own bundles,
   environment-provided tooling (npm/pnpm/node/corepack/uv/…), and ordinary npm packages that are not DSH
@@ -53,17 +58,24 @@ Rules:
   profile config it must end up in (`dependencies` entry plus `dsh.profile.bundles` entry), the
   verification command, and the fact that DSH must be restarted. `node_modules` is reproducible and is
   never copied; a self-written plugin also gets its source copied into the same directory.
-- **An MCP mount is recorded too, because it does not migrate by itself**: it lives only as a line in
-  `config\cordis.patch.yml`. Record its `serverName`, the runtime it depends on, any **external
-  prerequisite** (e.g. JADX-GUI with the `jadx-ai-mcp` plugin running), and how to verify it — remember
-  `failOnStartupError: false` mounts fail **silently**. The runtime itself is rebuilt, never backed up.
+- **An MCP mount is recorded too, because it does not migrate by itself**: it lives as a
+  `@deepseek-ai/dsh-mcp-client` row — either an `insert` entry in a profile's `cordis.patch.yml`
+  (starts with the harness: always-on) **or a row in an agent preset's `agent.cordis.yml` (starts only
+  when a new session selects that preset — a preset is the only lazy mount point DSH has)**. Record its
+  `serverName`, **which layer it is on**, the runtime it depends on, any **external prerequisite**
+  (e.g. JADX-GUI with the `jadx-ai-mcp` plugin running), and how to verify it — remember
+  `failOnStartupError: false` mounts fail **silently**, and that a profile-layer mount is invisible to
+  `dsh --dump-config` once it moves into a preset. The runtime itself is rebuilt, never backed up.
   Details in the `skills-inventory` skill.
 - **An agent preset is recorded too — it lives outside every profile and would otherwise vanish**: it sits
   only in `$DSH_HOME\.agent-presets\<id>\`, so a new machine that clones this repo and runs `install.ps1`
   gets nothing unless the preset is backed up here. Back up the **whole preset directory** under
   `presets\<id>\` (composition + metadata + a `README.md` naming the skills it references and the
-  generator scripts it depends on), restore by copying it back, and prove it with
-  `preset_probe validate <id>`. A preset **references** skills but provides none, so record the dependency
+  generator scripts it depends on), restore by copying it back, and verify it by **opening a new session
+  on that preset** — a mount failure fails session creation loudly and names the row, and the roster's
+  `broken: false` is only a shape check. (**`preset_probe` does not exist in current DSH**: it was a
+  session-authored dynamic Cordis package, never on disk — do not put it in a restore step.) A preset
+  **references** skills but provides none, so record the dependency
   order in its row and install the referenced skills first. Never edit a preset that ships with the
   deployment — a locally authored one under the user root is the only kind this covers. Details in the
   `skills-inventory` skill.

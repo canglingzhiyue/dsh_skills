@@ -26,8 +26,8 @@ pwsh -File install.ps1             # 执行（会先备份现有配置）
 | `SKILLS.md` | **账本**：装过什么、优先级（P0/P1/P2）、来源、适配、记录日期。**只追加，绝不重写** |
 | `INSTALL.md` | **安装说明**：手工版的完整步骤，按优先级排列，含 MCP 一节 |
 | `plugins/` | DSH 插件**配方**（`RECIPE.md`：来源 + 安装命令 + 前置 + profile 片段 + 验证） |
-| `presets/` | **agent preset** 的整份副本（`<id>/`：`agent.cordis.yml` + `preset.yml` + `README.md`）—— preset 不在任何 profile 配置里，换机器只能靠这份副本迁移 |
-| `config/` | **环境配置**：`AGENTS.md`（常驻规则）、`settings.yaml`、`cordis.patch.yml`（**MCP 挂载**）、`profile/`（插件依赖与 pnpm 配置） |
+| `presets/` | **agent preset** 的整份副本（`<id>/`：`agent.cordis.yml` + `preset.yml` + `README.md`）—— preset 不在任何 profile 配置里，换机器只能靠这份副本迁移。**本机 4 个 MCP 的挂载行就在 `presets/reverse/` 里**（preset 层 = 按需启动） |
+| `config/` | **环境配置**：`AGENTS.md`（常驻规则）、`settings.yaml`、`cordis.patch.yml`（profile 补丁层；**只有 profile 层 / 常驻的 MCP 挂载在这里** —— preset 层的随 `presets/` 走）、`profile/`（插件依赖与 pnpm 配置） |
 | `install.ps1` | **一键恢复脚本**：自动部分全做完，并打印必须人工完成的待办 |
 | `CHANGELOG.md` | **变更说明**：每次改了什么、为什么、影响哪些文件 |
 | `archive/` | 历史归档（如 `AGENTS.md` 的旧版本） |
@@ -39,10 +39,10 @@ pwsh -File install.ps1             # 执行（会先备份现有配置）
 前置检查（pwsh/git/node/pnpm/uv/dsh）
   → 备份现有配置到 $DSH_HOME\_restore_backup_<时间戳>
   → 恢复 skills/          → $DSH_HOME/skills/
-  → 恢复 presets/         → $DSH_HOME/.agent-presets/<id>/（agent preset；需 preset_probe validate 验证）
+  → 恢复 presets/         → $DSH_HOME/.agent-presets/<id>/（agent preset；**4 个 MCP 的挂载随它一起到位**；验证 = 新开会话，`preset_probe` 已不存在）
   → 恢复 config/AGENTS.md → $DSH_HOME/AGENTS.md（常驻规则）
   → 恢复 settings.yaml    → $DSH_HOME/
-  → 恢复 MCP + profile    → $DSH_HOME/profiles/<profile>/
+  → 恢复 profile 配置     → $DSH_HOME/profiles/<profile>/（含已清空的 cordis.patch.yml）
   → 装 4 个第三方插件（dsh plugin add）
   → 打印待办清单
 ```
@@ -56,8 +56,9 @@ pwsh -File install.ps1             # 执行（会先备份现有配置）
 | 登录态 | camoufox 的 `states/` `profiles/`，**永不进仓库** | 手工登录 |
 | JADX-GUI 及其插件 | 外部工具，不属本仓库范围 | 自行安装并保持开启 |
 | 生成 preset 依赖的清单 | 逆向模式的 persona 第一步要读 `$DSH_HOME\reverse\capabilities.md`，它是扫描器**生成物**（不入账本） | 跑 `pwsh -File "$D\skills\reverse-skill-router\scripts\scan-capabilities.ps1"` |
-| 改硬编码路径 | `cordis.patch.yml` 里的 `D:\AI_python\...`、`AGENTS.md` 里的账本路径、`settings.yaml` 里的 provider | 按新环境改 |
-| **重启 DSH** | 插件与 MCP 在启动时组合，不重启不生效 | 重启 |
+| 改硬编码路径 | `presets\reverse\agent.cordis.yml` 里 4 个 MCP 的 `D:\AI_python\...`、`AGENTS.md` 里的账本路径、`settings.yaml` 里的 provider | 按新环境改 |
+| 填 analyzer token（可选） | Anything Analyzer 启用鉴权时才需要；**凭据永不进仓库** | 写进 `$DSH_HOME\.env` 的 `ANALYZER_MCP_TOKEN`（`.env` 只在启动时读取） |
+| **重启 DSH** | 插件与 profile 层 MCP 在启动时组合，不重启不生效（**preset 层的 MCP 是按需的，新开会话即生效**） | 重启 |
 
 ## 本仓库不包含什么
 

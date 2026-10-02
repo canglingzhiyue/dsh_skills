@@ -3,106 +3,32 @@
 # overrides, disables, and insert lists; `!!js` expressions allowed).
 
 # ---------------------------------------------------------------------------
-# Camoufox 逆向 MCP —— camoufox-reverse-mcp
-# 独立环境位于 D:\AI_python\camoufox（自带 venv + 官方/定制版浏览器引擎）。
-# 使用说明：D:\AI_python\camoufox\使用说明.md
-# 工具在会话里以 mcp__camoufox__<tool> 暴露，例如 mcp__camoufox__launch_browser
+# MCP 挂载已移出本层 —— 见文件末尾说明
 # ---------------------------------------------------------------------------
-- insert:
-    - id: mcp-camoufox-reverse
-      name: '@deepseek-ai/dsh-mcp-client'
-      config:
-        serverName: camoufox
-        transport: stdio
-        command: 'D:\AI_python\camoufox\.venv\Scripts\python.exe'
-        args:
-          - '-m'
-          - 'camoufox_reverse_mcp'
-          - '--locale'
-          - 'zh-CN'
-        env:
-          PYTHONUTF8: '1'
-          PYTHONIOENCODING: 'utf-8'
-        toolCallTimeoutMs: 120000
+# 这里曾经挂着 4 个 MCP：camoufox / jadx / ida / analyzer。
+#
+# 为什么移走：挂在本层 = host 层 = `dsh web` 一启动就 spawn 全部 MCP 服务器。
+# 实测（2026-10-02）：3 条 stdio 链共 10 个常驻进程、约 300 MB，全部在启动后
+# 9~13 秒内拉起；而 `dsh-mcp-client` 的 `apply()` 会**同步等待「连接 + tools/list」
+# 完成**才让条目激活，其 Config schema 里没有任何懒加载字段，启动与发现超时又
+# 直接继承 MCP SDK 的 60s —— 启动期的卡顿来自这里，且无法靠配置消除。
+#
+# 移到哪了：agent preset `reverse`（会话选择器里的「逆向模式」），
+#   $DSH_HOME\.agent-presets\reverse\agent.cordis.yml
+# 为什么这样能按需：preset 是 DSH 里唯一的惰性挂载点 —— `dsh-agent-presets`
+# 只在**新会话真的选中该 preset** 时才 compose 它（"reading never mounts"）。
+#
+# 新行为：`dsh web` 启动与普通会话 → 零 MCP 进程、启动不再等 MCP；
+#         新开一个「逆向模式」会话 → 才拉起这 4 台服务器。
+# 代价：  普通会话不再有 `mcp__camoufox__*` / `mcp__jadx__*` / `mcp__ida__*` /
+#         `mcp__analyzer__*` 工具；开逆向会话时要等它们连上（camoufox 冷启动最慢）。
+#
+# 想改回常驻：把 `presets\reverse\agent.cordis.yml` 末尾那 4 段（`mcp-camoufox-reverse`
+# / `mcp-jadx` / `mcp-ida` / `mcp-anything-analyzer`）整段复制回本文件，按原样包进
+# `- insert:` 列表即可 —— 它们就是从这里原封不动搬过去的，只有 analyzer 的
+# `headers.Authorization` 从明文 token 改成了 `!!js process.env.ANALYZER_MCP_TOKEN`
+# 引用（token 现在在 `$DSH_HOME\.env`）。
+#
+# 账本：D:\AI_python\skills_backup\SKILLS.md 的 4 条 MCP 记录 + reverse preset 记录。
 
-# ---------------------------------------------------------------------------
-# JADX 逆向 MCP —— jadx-mcp-server (zinja-coder/jadx-ai-mcp)
-# 通过 uv 启动 D:\AI_python\MCP\MCP合集\jadx-mcp-server\jadx_mcp_server.py
-# 依赖 fastmcp / httpx / requests，由 uv 依 pyproject.toml + uv.lock 自动装到缓存环境。
-# 需要 JADX-GUI 里装好 jadx-ai-mcp 插件并保持开启（默认 127.0.0.1:8650）。
-# 工具在会话里以 mcp__jadx__<tool> 暴露，例如 mcp__jadx__get_all_classes
-# ---------------------------------------------------------------------------
-- insert:
-    - id: mcp-jadx
-      name: '@deepseek-ai/dsh-mcp-client'
-      config:
-        serverName: jadx
-        transport: stdio
-        command: 'C:\Users\y\.local\bin\uv.exe'
-        args:
-          - '--directory'
-          - 'D:\AI_python\MCP\MCP合集\jadx-mcp-server'
-          - 'run'
-          - 'jadx_mcp_server.py'
-        env:
-          PYTHONUTF8: '1'
-          PYTHONIOENCODING: 'utf-8'
-        toolCallTimeoutMs: 120000
-        failOnStartupError: false
-
-# ---------------------------------------------------------------------------
-# IDA Pro 逆向 MCP —— Hex-Rays 官方 ida-mcp（PyPI 包 `ida-mcp`，MIT）
-# 上游：https://github.com/HexRaysSA/ida-mcp  文档：https://docs.hex-rays.com/core/mcp
-# 由 uvx 直接跑 PyPI 上的 ida-mcp，无需手工建 venv；uvx 缓存已预热（首次启动约 1.7s）。
-# 依赖本机 IDA 9.4 的 idalib：IDA 安装路径记在
-#   %APPDATA%\Hex-Rays\IDA Pro\ida-config.json → "D:\ProgramsDev\IDA Professional 9.4"
-# （只需在 PATH 里有 uv / uvx / git；不需要设 IDADIR 环境变量）
-# 外部前置（可选）：IDA GUI 插件 —— 装了才能操作「已打开的 IDA 实例」；
-#   安装：uvx ida-hcli plugin install https://github.com/HexRaysSA/ida-mcp（装完重启 IDA）
-# 没装 GUI 插件也能用（headless：让 MCP 自己用 idalib 打开二进制）。
-# 工具在会话里以 mcp__ida__<tool> 暴露。
-# ---------------------------------------------------------------------------
-- insert:
-    - id: mcp-ida
-      name: '@deepseek-ai/dsh-mcp-client'
-      config:
-        serverName: ida
-        transport: stdio
-        command: 'C:\Users\y\.local\bin\uvx.exe'
-        args:
-          - '--exclude-newer=1s'
-          - 'ida-mcp'
-          - 'stdio'
-          - '--agent=dsh'
-        env:
-          PYTHONUTF8: '1'
-          PYTHONIOENCODING: 'utf-8'
-        toolCallTimeoutMs: 600000
-
-# ---------------------------------------------------------------------------
-# Anything Analyzer MCP —— 抓包/协议分析工具（内置 MCP Server，StreamableHTTP）
-# 上游：https://github.com/Mouseww/anything-analyzer （MIT，Electron GUI 应用）
-# 本机安装：D:\ProgramsDev\AnythingAnalyzer\Anything Analyzer.exe
-# 配置：%APPDATA%\anything-analyzer\mcp-server-config.json
-#   { enabled:true, host:"127.0.0.1", port:23816, authEnabled:true, authToken:"<见该文件>" }
-# 外部前置：GUI 应用必须处于运行状态（MCP Server 跑在 Electron 主进程里）；
-#   不开 GUI → 23816 无监听 → 本 MCP 静默失效（failOnStartupError:false）。
-#   探活：pwsh -File <skills>\anything-analyzer\scripts\probe-mcp.ps1
-# 工具在会话里以 mcp__analyzer__<tool> 暴露，例如 mcp__analyzer__get_requests
-# 注意：Authorization 的 token 与本机 %APPDATA% 配置文件一致；换机器需重取。
-# ---------------------------------------------------------------------------
-- insert:
-    - id: mcp-anything-analyzer
-      name: '@deepseek-ai/dsh-mcp-client'
-      config:
-        serverName: analyzer
-        transport: streamable-http
-        url: 'http://127.0.0.1:23816/mcp'
-        headers:
-          Authorization: 'Bearer fc6816bb-4220-42f4-8baf-9f6595b3bfd1'
-        toolCallTimeoutMs: 120000
-        failOnStartupError: false
-
-
-
-
+[]

@@ -17,7 +17,10 @@
 - `SKILLS.md` —— 账本（装过什么、优先级、来源、为什么这样装）
 - `skills\<name>\` —— **全部 skill 的完整内容**（= `$DSH_HOME/skills` 的镜像），直接复制到 skill 根即可
 - `plugins\<name>\RECIPE.md` —— 插件配方（不复制 `node_modules`）
-- `config\` —— 常驻规则 `AGENTS.md`、DSH 设置 `settings.yaml`、**MCP 挂载** `cordis.patch.yml`、profile 配置
+- `config\` —— 常驻规则 `AGENTS.md`、DSH 设置 `settings.yaml`、profile 配置、**已清空的**
+  `cordis.patch.yml`（MCP 挂载 2026-10-02 起移入 `presets\reverse\`，该文件留作改回常驻的对照）
+- `presets\<id>\` —— 用户自建 agent preset 的整份副本（`agent.cordis.yml` + `preset.yml` + `README.md`）；
+  **4 个 MCP 的挂载行就在 `presets\reverse\agent.cordis.yml` 里**
 - `README.md` / `CHANGELOG.md` —— 仓库说明 / 变更说明
 - `install.ps1` —— 一键恢复脚本
 
@@ -43,9 +46,12 @@
    - **DSH 插件**：**不要**复制到 skill 根。照 `plugins\<name>\RECIPE.md` 执行
      （`dsh plugin --profile <profile> add <spec>`、把那个 `allowBuilds` 键补进 `pnpm-workspace.yaml`、
      核对 profile 的 `dependencies` 与 `dsh.profile.bundles`），**装完必须重启 DSH**。
-   - **MCP**：把 `config\cordis.patch.yml` 放到 `<profile>\cordis.patch.yml`（它与 profile 三件配置配套），
-     再按「MCP」小节重建它依赖的运行时与外部前置。**同样必须重启 DSH**。
-   插件与 MCP 都放在最后装，这样只需重启一次。
+   - **MCP**：**装 `presets\reverse\` 就同时装好了 MCP 挂载**（4 个 MCP 都在那个 composition 里，
+     2026-10-02 起从 profile 层移入）。所以 MCP **不再**依赖 `config\cordis.patch.yml`——
+     该文件现在是空的 `[]` 加注释，只在"改回常驻"时才用得上。之后按「MCP」小节重建各运行时与外部前置。
+     顺序上**先装齐 preset 引用的 5 个技能**（见「MCP」一节开头的说明）再放 preset。
+     另外 analyzer 的 token（可选）要写进 `$DSH_HOME\.env`，**重启 DSH 才生效**。
+   插件与 preset/MCP 都放在最后装，这样只需重启一次。
 6. **硬性要求**：`<skill 根>\<name>\SKILL.md` 必须存在；frontmatter 只放 `name` 和 `description`
    （`name` 用 kebab-case 且与目录名一致；`description` ≤500 字符，超了 DSH catalog 会截断），
    可选 `metadata`。DSH 不认 `argument-hint`、`license` 这类宿主专属字段。
@@ -354,16 +360,20 @@ stdout，而 MCP 的 stdio 通道上 stdout 就是 JSON-RPC 流，客户端会�
 
 ### 第 4 步：接进 DSH
 
-把 `references\重建配方.md` §4 的 `insert` 片段贴进 `$DSH_HOME\profiles\web\cordis.patch.yml`：
-`dsh-mcp-client`、serverName `camoufox`、transport `stdio`、`command` 指向 venv 的 `python.exe`、
-`args: ['-m','camoufox_reverse_mcp','--locale','zh-CN']`、`toolCallTimeoutMs: 120000`。
-profile 是 `patchReload: live`，改完几秒生效。验证：
+**通常什么都不用做** —— 该 MCP 的挂载行已在 `presets\reverse\agent.cordis.yml` 的 MCP 段里
+（`serverName: camoufox`、transport `stdio`、`command` 指向 venv 的 `python.exe`、
+`args: ['-m','camoufox_reverse_mcp','--locale','zh-CN']`、`toolCallTimeoutMs: 120000`）。
+装好 `reverse` preset 即生效；要单独改它，编辑那个文件（**不是** profile 的 `cordis.patch.yml`）。
+验证：
 
 ```powershell
-dsh --profile web --dump-config | Select-String 'mcp-camoufox-reverse' -Context 0,6
+# ⚠️ --dump-config 只打印 host 组装，**看不到 preset 里的行** —— 改用能力扫描器：
+pwsh -NoProfile -File "$env:USERPROFILE\.dsh\skills\reverse-skill-router\scripts\scan-capabilities.ps1"
+# 清单第 1 节的「层」列应显示 preset:reverse，command 指向 venv 的 python.exe
 ```
 
-生效后工具以 `mcp__camoufox__*` 暴露（39 个），并有一个 venv 的 `python.exe` 进程常驻。
+生效后，在**新开的「逆向模式」会话**里工具以 `mcp__camoufox__*` 暴露（39 个），
+并有一个 venv 的 `python.exe` 进程常驻（普通会话里没有这些工具，也没有该进程）。
 
 ### 前置依赖
 
@@ -1099,8 +1109,32 @@ Copy-Item "D:\AI_python\skills_backup\presets\reverse\*" `
 
 ### 第 3 步：验证挂载
 
-用 `preset_probe` 工具 `action=validate id=reverse` → 期望 `mounted OK: reverse`。
-（它跑的是 DSH 真实挂载校验，等价于会话启动。注意：roster 的 `broken: false` **不是**验证。）
+**`preset_probe` 工具本机已不存在** —— 它是旧会话里动态定义的 cordis 包，重启即消失、从未落盘，
+所以本清单与 preset README 里旧版的 `preset_probe validate reverse` 步骤**已失效**，不要照做。
+现在按下面的顺序验证（从弱到强）：
+
+1. **静态**：用 Loader 真实 YAML 方言解析 composition，并逐行喂给各插件的 Config schema。
+   `skills\reverse-skill-router\scripts\scan-capabilities.ps1` 的 preset 段就是同一套解析；
+2. **半动态**：`pwsh -File skills\reverse-skill-router\scripts\scan-capabilities.ps1` ——
+   清单里 4 条 MCP 的「层」列应显示 `preset:reverse`；
+3. **真动态（唯一权威）**：新开一个会话、预设选「逆向模式」。挂载失败会让**会话创建直接失败并回滚**，
+   并指名是哪一行 —— 所以这一步一出错就是响的，不会静默半组装。
+
+⚠️ 注意 roster 里 `broken: false` **不算验证**：它只做形状检查（YAML 能解析、有具名行），
+行引用的包不存在、配置非法、行没激活、服务发布到根 realm 这四种失败它都照过。
+
+### 第 3.5 步：analyzer 的凭据（可选，仅启用鉴权时需要）
+
+4 个 MCP 里只有 analyzer 用凭据。它的 token 不在 composition 里，而在 `$DSH_HOME\.env`：
+
+```powershell
+# token 取自 %APPDATA%\anything-analyzer\mcp-server-config.json 的 authToken
+Add-Content "$env:USERPROFILE\.dsh\.env" "`nANALYZER_MCP_TOKEN=<token>"
+# .env 只在启动时读取 → 必须重启 DSH
+```
+
+本机 `authEnabled: false`，不设也能用；设了才能在该应用开启鉴权后继续连通。
+**不要**把 token 写回 `presets\reverse\agent.cordis.yml` —— 那会把凭据带进备份仓库。
 
 ### 第 4 步：生成能力清单（**必做**）
 
@@ -1121,23 +1155,48 @@ pwsh -NoProfile -File "$env:USERPROFILE\.dsh\skills\reverse-skill-router\scripts
   改坏 `cordis` 还会让 preset 创作能力失效。要改就改用户根下的这一份。
 - **不要**把本机工具路径写进 `agent.cordis.yml`：本机状态一律由能力清单提供（那正是"装了新工具不用改
   preset"的原因）。新工具 → 重跑扫描器。
+  **唯一的例外**是文件末尾那 4 段 MCP 挂载 —— 挂载行本身就是路径（详见「MCP」一节）。
+  它们决定的是"怎么连上服务器"，不是"本机有什么"；某个 MCP 在不在、能不能用，仍然由能力清单说了算。
 
 ### 维护提醒
 
-改完 `agent.cordis.yml`：① `preset_probe validate reverse`；② 重新整份复制回 `presets\reverse\`
-（并核对 SHA256）；③ 在 `SKILLS.md` 追加一行日志。`capabilities.md/json` 是**生成物**，不入账本。
+改完 `agent.cordis.yml`：① 重跑能力扫描器（见第 3 步，`preset_probe` 已失效）；② 重新整份复制回
+`presets\reverse\`（并核对 SHA256）；③ 在 `SKILLS.md` 追加一行日志。`capabilities.md/json` 是**生成物**，不入账本。
 
 ---
 
 ## MCP（P2 独立类 · 网络来源 + 本地运行时）
 
-本机在 `<profile>\cordis.patch.yml` 里挂了 **4 个 MCP server**。它们**不是 skill、也不是 npm 插件**，
-而是一条 DSH 配置（`@deepseek-ai/dsh-mcp-client` 的 `insert` 条目）—— 但同样必须迁移，
-否则新环境会少掉这些工具。配置文件整份备份在 **`config\cordis.patch.yml`**。
+本机有 **4 个 MCP server**。它们**不是 skill、也不是 npm 插件**，而是一条 DSH 配置
+（`@deepseek-ai/dsh-mcp-client` 的条目）—— 但同样必须迁移，否则新环境会少掉这些工具。
 
-装法：把 `config\cordis.patch.yml` 放到 `<profile>\cordis.patch.yml`（与 profile 三件配置配套），
-再重建下面各自的运行时。**装完必须重启 DSH**（MCP 在 profile 启动时组合；本机实测 `patchReload: live`
-下**新增 MCP 挂载会即时热加载**，但重启一次更保险）。
+### 挂在哪一层：`preset` 而不是 `profile`（2026-10-02 起）
+
+**4 个 MCP 全部挂在 agent preset `reverse` 的 `agent.cordis.yml` 里，不再挂在 profile 的
+`cordis.patch.yml`。** 两者的差别是**进程何时启动**，不是能不能用：
+
+| 挂载层 | 何时启动 | 可见范围 | 代价 |
+|---|---|---|---|
+| profile（host 组装） | `dsh web` 一启动就 spawn 全部 | 所有会话 | 常驻进程 + 启动期同步等待 |
+| **preset（现在）** | **只有新会话真的选中该 preset 时才启动** | 只有该 preset 的会话 | 开该 preset 会话时要等服务器连上 |
+
+为什么必须改：原先挂 profile 层时，`dsh web` 启动后 9~13 秒内 spawn 出 **10 个进程、约 300 MB**
+（camoufox 2 个 python、jadx uv+2 python、ida uvx+uv+ida-mcp+2 python），且
+`dsh-mcp-client` 的 `apply()` 会**同步等待「连接 + `tools/list`」完成**才让条目激活 ——
+它的 Config schema 里**没有任何懒加载字段**，启动与发现超时又直接继承 MCP SDK 的 60 s。
+所以要按需启动，只能换挂载层：**preset 是 DSH 里唯一的惰性挂载点**
+（`dsh-agent-presets` 的 "reading never mounts" —— 读文件不会挂载，只有新会话选中才 compose）。
+
+新环境的装法因此变成：**装完 `reverse` preset 就同时装好了 MCP 挂载**（见上文 preset 一节）。
+`config\cordis.patch.yml` 里**不再有** MCP 条目 —— 它是空的 `[]` 加说明注释，留作改回常驻的对照。
+
+⚠️ **改回常驻**：把 `presets\reverse\agent.cordis.yml` 末尾那 4 段（`mcp-camoufox-reverse` /
+`mcp-jadx` / `mcp-ida` / `mcp-anything-analyzer`）整段搬回 profile 的 `cordis.patch.yml`，
+包进 `- insert:` 列表即可。它们本来就是从那里原封不动搬过去的，**只有 analyzer 的
+`headers.Authorization` 从明文 token 改成了 `!!js process.env.ANALYZER_MCP_TOKEN` 引用**（见下）。
+
+⚠️ **有效期**：MCP 挂在 preset 层后，**普通会话（`standard` 等）里根本没有 `mcp__*` 工具**。
+要用 jadx / IDA / camoufox / analyzer，必须先**新开一个「逆向模式」会话**。
 
 | MCP | `serverName` | 工具前缀 | 依赖的运行时 |
 |---|---|---|---|
@@ -1145,6 +1204,12 @@ pwsh -NoProfile -File "$env:USERPROFILE\.dsh\skills\reverse-skill-router\scripts
 | jadx | `jadx` | `mcp__jadx__*` | `D:\AI_python\MCP\MCP合集\jadx-mcp-server`（约 41 MB，见下） |
 | ida | `ida` | `mcp__ida__*` | 本机 IDA 9.4 的 idalib（无独立目录，`uvx` 跑 PyPI 包，见下） |
 | analyzer | `analyzer` | `mcp__analyzer__*` | **Anything Analyzer Electron GUI**（`D:\ProgramsDev\AnythingAnalyzer`，约 300 MB，见下）—— 注意它是**唯一的 `transport: streamable-http` 挂载**，不是 stdio |
+
+⚠️ **验证方式随之变化**：`dsh --profile web --dump-config` **再也看不到**这 4 个条目了 ——
+`--dump-config` 只打印 host 组装的树，不含 preset composition。改用：
+`pwsh -File skills\reverse-skill-router\scripts\scan-capabilities.ps1`（它同时扫 profile 层与
+preset 层，清单里「层」这一列会标出 `preset:reverse`），或直接在新开的逆向模式会话里看
+工具列表是否出现 `mcp__*`。
 
 ### camoufox MCP
 
@@ -1226,7 +1291,7 @@ pwsh -NoProfile -File "$env:USERPROFILE\.dsh\skills\reverse-skill-router\scripts
   `open_database` 会撞上竞态返回 `database manager is shutting down`；要保持连接逐条等响应。
 - **不迁移 / 不备份**：`uvx` 缓存环境（PyPI 一条命令可重装）、
   `%APPDATA%\HexRays\IDA Pro\plugins\ida-mcp\`（hcli 可重装）、IDA 的 `venv`（可重建）、
-  IDA 本体与 license（用户自行安装）。挂载条目已在 `config\cordis.patch.yml` 里。
+  IDA 本体与 license（用户自行安装）。挂载条目在 `presets\reverse\agent.cordis.yml` 的 MCP 段里。
 
 ### analyzer MCP（**唯一的非 stdio 挂载**）
 
@@ -1264,10 +1329,12 @@ pwsh -NoProfile -File "$env:USERPROFILE\.dsh\skills\reverse-skill-router\scripts
 
   - 用户数据目录用的是 package.json 的 **`name`**（`anything-analyzer`），**不是** productName ——
     所以路径是 `%APPDATA%\anything-analyzer\`，不要去找 `%APPDATA%\Anything Analyzer\`。
-  - `authToken` 留空时首次启动**自动生成 UUID 并写回该文件**；把它填进
-    `config\cordis.patch.yml` 里 analyzer 条目的 `headers.Authorization: Bearer <token>`。
-    **`config\cordis.patch.yml` 里现存的那个值是本机的**（回环服务凭证，泄漏面仅限本机 23816 端口），
-    换机器重新生成后要替换。
+  - `authToken` 留空时首次启动**自动生成 UUID 并写回该文件**。**它不再写进任何配置/备份文件**：
+    把它填进 `$DSH_HOME\.env` 的 `ANALYZER_MCP_TOKEN=`，composition 里只留
+    `!!js process.env.ANALYZER_MCP_TOKEN` 这段引用 —— 因为 `presets\reverse\` 要进私有备份仓库，
+    而凭据永不备份（本机旧版曾把它明文写在 `config\cordis.patch.yml` 里）。换机器重新生成后替换该变量。
+    **`.env` 只在 DSH 启动时读取 → 改完必须重启 DSH**；未设该变量时不发 `Authorization` 头
+    （本机 `authEnabled: false`，照样可用）。
   - `host` 出厂默认是 `0.0.0.0`（对局域网暴露）—— 本机已收紧为 `127.0.0.1`。
     手机抓包走的是 MITM 的 8888，不受影响。
   - `systemProxy: false` = **不动系统代理**。
@@ -1282,16 +1349,16 @@ pwsh -NoProfile -File "$env:USERPROFILE\.dsh\skills\reverse-skill-router\scripts
   pwsh -File "$env:USERPROFILE\.dsh\skills\anything-analyzer\scripts\start-analyzer.ps1"
   ```
 
-- **验证**：重启 DSH 后会话里应出现 `mcp__analyzer__*`（30 个，如 `get_requests` / `filter_requests` /
-  `cdp_send_command`）。本机实测闭环：`create_session` → `start_capture` → `navigate` → `get_requests`
-  能读到完整 method/url/status/headers/response body。
+- **验证**：在**新开的「逆向模式」会话**里应出现 `mcp__analyzer__*`（30 个，如 `get_requests` /
+  `filter_requests` / `cdp_send_command`）。本机实测闭环：`create_session` → `start_capture` →
+  `navigate` → `get_requests` 能读到完整 method/url/status/headers/response body。
 - **踩过的坑（别重踩）**：① `start_capture` 之后**第一次导航会漏抓**（CDP attach 需时间）——
   先"预热"导航一次或等 2-3 秒；② 默认 UA 带 `anything-analyzer/<版本>`，**站点一眼识别抓包工具** ——
   用 `cdp_send_command` + `Network.setUserAgentOverride` 洗掉；③ **`Invoke-WebRequest` 发 MCP 请求
   第二个必 404**，必须用 `curl.exe` 或 MCP SDK（探活脚本已按此实现）。
 - **不迁移 / 不备份**：应用本体（约 300 MB，Release 重装）、`%APPDATA%\anything-analyzer\` 下的
-  运行时数据（数据库、缓存、`certs\ca-key.pem` —— **私钥，永不备份**）。挂载条目已在
-  `config\cordis.patch.yml` 里。
+  运行时数据（数据库、缓存、`certs\ca-key.pem` —— **私钥，永不备份**）。挂载条目在
+  `presets\reverse\agent.cordis.yml` 的 MCP 段里（token 走 `$DSH_HOME\.env`，见上）。
 - **CA 根证书**：本机**尚未**装入系统信任库 → 目前**只能抓 HTTP**，HTTPS MITM 会因证书不受信而失败
   （浏览器侧 CDP 抓包不受此限）。装它是系统级安全变更（`certutil -addstore Root` + 管理员），
   **要用户拍板**。手机侧的步骤与 Android 7+ 的信任限制见 `skills\anything-analyzer\references\setup.md`。
@@ -1322,7 +1389,8 @@ pwsh -NoProfile -File "$env:USERPROFILE\.dsh\skills\reverse-skill-router\scripts
 
 **三个** MCP 依赖的运行时（camoufox 的 venv+引擎约 **2.3 GB**、jadx 约 **41 MB**）**只记配方、不备份**；
 `ida` 没有独立运行时目录（`uvx` 跑 PyPI 包）。
-MCP 的挂载条目已在 `config\cordis.patch.yml` 里。JADX-GUI 及其插件、IDA 本体与其 license、
+MCP 的挂载条目在 `presets\reverse\agent.cordis.yml` 里（2026-10-02 起从 profile 层移入，按需启动）。
+JADX-GUI 及其插件、IDA 本体与其 license、
 IDA GUI 插件目录都属于**外部工具**，不在本仓库范围内 —— 需要用户自行安装。
 ---
 
@@ -1377,6 +1445,8 @@ Get-ChildItem D:\AI_python -Recurse -Filter pyvenv.cfg -Depth 4 | Select-String 
 - 旧环境的完整 `pip freeze` / `conda list` / 配置快照留在 `D:\dev\py\_conda_migration_2026-09-29\`。
 - PyCharm 项目 `D:\dev\py\code\juhe5\.idea\misc.xml` 里还有一条失效的 `<option name="sdkName" value="juhe4" />`（历史残留，不影响使用）。
 - **MCP 的 `cordis.patch.yml` 改动需重启 DSH 才生效**；重启后 jadx / ida 会用独立 uv 拉起。
+  （**2026-10-02 更新**：jadx / ida 等 4 个 MCP 已从该文件移入 `presets\reverse\agent.cordis.yml`，
+  改为按需启动 —— 改 preset 层的挂载**不需要**重启，新开会话即生效；见本文件前面的「MCP」一节。）
 
 ## anything-analyzer（P2 独立类 · 本地自制 skill + 网络来源的运行时）
 
@@ -1405,7 +1475,8 @@ Electron 应用，约 300 MB。**重建步骤、SHA256、Release tag 与包内�
 
 | 文件 | 改了什么 |
 |---|---|
-| `config\cordis.patch.yml` | 新增 `mcp-anything-analyzer` 的 `insert` 条目（`transport: streamable-http`） |
+| `presets\reverse\agent.cordis.yml` | 新增 `mcp-anything-analyzer` 条目（`transport: streamable-http`）。**2026-10-02 起 MCP 挂载都在 preset 里，不在 `config\cordis.patch.yml`**；该文件里的明文 token 同时改为 `!!js process.env.ANALYZER_MCP_TOKEN` 引用 |
+| `$DSH_HOME\.env` | 新增 `ANALYZER_MCP_TOKEN=<token>`（**该文件不入仓库** —— Harness-home 专属层，明确不随仓库传播） |
 | `skills\reverse-skill-router\references\domain-registry.json` | 新增 `protocol` 域；web / android 域加入 anything-analyzer 支撑角色 |
 | `skills\reverse-skill-router\SKILL.md` | 域表加 `protocol` 行；§9 边界表加「抓包 / 协议还原」行 |
 | `skills\reverse-skill-router\scripts\scan-capabilities.ps1` | **新增 streamable-http 分支**（原先只认 stdio，非 stdio 条目在能力清单里 command/前置两列会全空） |
