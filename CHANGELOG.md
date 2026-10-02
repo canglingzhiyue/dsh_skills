@@ -80,6 +80,23 @@ mcp 应该在需要用到的时候启动才对」。先调查后动手，用户�
   需用户新开一个逆向模式会话确认 `mcp__*` 工具出现（挂载失败会让会话创建直接报错，不会静默半组装）。
 - `ANALYZER_MCP_TOKEN` 需**重启 DSH** 才对 analyzer 生效（当前 `authEnabled: false`，不影响连通）。
 
+### 已做的静态验证（不能替代上面的实测）
+
+- **composition 解析 + 插件 schema：4/4 通过**（两种环境状态各一次）。用 Loader 自己的
+  YAML 方言（`cordis-plugin-include` 导出的 `entryListSchema`，它自带 `!!js` 类型）解析，
+  再把每行 `config` 喂给 `dsh-mcp-client` 自己的 Schemastery schema。无 token →
+  `headers = {}`；有 token → `headers = {"Authorization":"Bearer tok123"}`。
+- **包名解析有实现保证**：`dsh-agent-presets/mount` 的 `PresetTree.import()` 把裸包名
+  **从"已安装 harness"的 base** 解析（源码注释原文：*"a locally authored preset lives under the
+  user's home, where Node's upward `node_modules` walk never reaches the harness's own dependencies,
+  so every `@deepseek-ai/dsh-*` row would fail to import. The mount records the host composition's
+  base instead … and bare names resolve from there."*）。本机该包确实在 harness 下
+  （239 个 `@deepseek-ai/*` 包），profile 的 `node_modules` 里反而没有。
+- **`failOnStartupError` 默认就是 `false`**（schema `z.boolean().default(false)`）——
+  所以 MCP 连不上**不会**阻断逆向会话创建，只会静默少掉工具；与预设里"用前先探活"的纪律一致。
+- **生命周期**：preset 子树归其 agent 所有，agent 拆掉即 dispose 子树 → MCP 服务器随会话结束退出
+  （不会留下新的常驻空闲进程）；代价是每个逆向会话有自己的一份服务器进程。
+
 ---
 
 ## 2026-09-30 — 接入 Anything Analyzer：新增 `protocol` 域 + 抓包/协议分析能力（skill + MCP 各一条）

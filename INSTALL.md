@@ -1198,6 +1198,16 @@ pwsh -NoProfile -File "$env:USERPROFILE\.dsh\skills\reverse-skill-router\scripts
 ⚠️ **有效期**：MCP 挂在 preset 层后，**普通会话（`standard` 等）里根本没有 `mcp__*` 工具**。
 要用 jadx / IDA / camoufox / analyzer，必须先**新开一个「逆向模式」会话**。
 
+**生命周期（新环境的预期）**：preset 子树归它的 agent 所有（`dsh-agent-presets/mount` 的
+`PresetTree`），agent 拆掉时整棵子树一起 dispose —— 所以这些 MCP 服务器**随会话结束而退出**，
+不会变成新的常驻空闲进程。代价是**每个逆向会话都有自己的一份服务器进程**（并发的逆向会话 =
+多份，内存成倍），且开这个会话时要等服务器连上（camoufox 冷启动最慢）。
+
+**挂载失败不会拦住会话**：这 4 行的 `failOnStartupError` 都是 `false`
+（该字段 schema 默认值就是 `false`；jadx / analyzer 显式写、camoufox / ida 用默认值）。
+所以服务器连不上时只是**静默少掉工具**，逆向会话仍能创建 —— 用工具前务必按能力清单探活。
+能让会话创建失败的只有硬错误（composition 语法/结构错误、行引用的包不存在）。
+
 | MCP | `serverName` | 工具前缀 | 依赖的运行时 |
 |---|---|---|---|
 | camoufox | `camoufox` | `mcp__camoufox__*` | `D:\AI_python\camoufox\.venv`（约 2.3 GB，见下） |

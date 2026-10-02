@@ -318,11 +318,18 @@
 # 另一个代价：新建逆向模式会话时要等这几台服务器连上（camoufox 冷启动最慢），
 # 这是把启动开销从「每次 `dsh web`」换成「每次开逆向会话」的必然结果。
 #
+# 生命周期（实现层面）：preset 子树**归它的 agent 所有**（`dsh-agent-presets/mount`
+# 的 `PresetTree`），agent 被拆掉时整棵子树一起 dispose —— 也就是说这些 MCP 服务器
+# 随会话结束而退出，不会变成新的常驻空闲进程。代价是每个逆向会话有自己的一份
+# 服务器进程（并发的逆向会话 = 多份），且工具随会话存亡。
+#
 # 这 4 行只往 `ctx.tools` 注册工具、不 `provide` 任何服务，所以和上面的
 # `tool-fs` / `tool-pwsh` 一样**不需要** `isolate` realm —— 不要给它们套 group。
 #
-# `failOnStartupError: false` 沿用原值：前置缺失（JADX-GUI 没开、Analyzer GUI 没开
-# 等）时**静默失效不报错**，所以用工具前先按 `reverse-skill-router` 的能力清单探活。
+# `failOnStartupError` 沿用原值（camoufox / ida 用默认值，jadx / analyzer 显式 false；
+# 该字段的 schema 默认就是 `false`）：前置缺失（JADX-GUI 没开、Analyzer GUI 没开等）
+# 时**静默失效不报错**，也**不会**让逆向会话创建失败 —— 所以用工具前先按
+# `reverse-skill-router` 的能力清单探活，不要把"有工具"当成"服务器可用"。
 
 - id: mcp-camoufox-reverse
   name: '@deepseek-ai/dsh-mcp-client'

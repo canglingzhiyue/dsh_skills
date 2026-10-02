@@ -36,6 +36,16 @@ host 层，后果是 `dsh web` **一启动就 spawn 全部 MCP 服务器**：实
 代价（明确的取舍）：普通会话不再有 `mcp__camoufox__*` / `mcp__jadx__*` / `mcp__ida__*` /
 `mcp__analyzer__*`；开逆向会话时要等服务器连上（camoufox 冷启动最慢）。
 
+**生命周期**：preset 子树归它的 agent 所有（`dsh-agent-presets/mount` 的 `PresetTree`），
+agent 被拆掉时整棵子树一起 dispose —— 这些 MCP 服务器**随会话结束而退出**，
+不会变成新的常驻空闲进程。代价是每个逆向会话有自己的一份服务器进程
+（并发的逆向会话 = 多份），工具也随会话存亡。
+
+**挂载失败不会拦住会话**：4 行的 `failOnStartupError` 都是 `false`
+（camoufox / ida 用 schema 默认值，jadx / analyzer 显式写），所以服务器连不上时
+只会**静默少掉工具**，不会让逆向会话创建失败 —— 用工具前先按能力清单探活。
+（能让会话创建失败的只有 composition 语法/结构错误、行引用的包不存在这类硬错误。）
+
 **它们仍然不需要 `isolate` realm** —— 只往 `ctx.tools` 注册工具、不 `provide` 服务，
 和上面的 `tool-fs` / `tool-pwsh` 同类。**不要**给它们套 group。
 
