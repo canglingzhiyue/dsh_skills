@@ -18,10 +18,10 @@
 
 | 文件 | 说明 |
 |---|---|
-| `agent.cordis.yml` | composition：DSH 自带 `standard` 骨架 + 逆向 persona（身份、默认已授权、开工五步、验收骨架、脚本分级、增删自检、事实纪律）+ **末尾 4 段逆向 MCP 挂载**（见下） |
+| `agent.cordis.yml` | composition：DSH 自带 `standard` 骨架 + 逆向 persona（身份、默认已授权、开工五步、验收骨架、脚本分级、增删自检、事实纪律）+ **末尾 5 段 MCP 挂载**（见下；2026-10-08 起是 5 段，新增自研 `wireshark-mcp-lite`） |
 | `preset.yml` | 显示名与描述（会话选择器里显示「逆向模式」） |
 
-## 这 4 个 MCP 为什么在这里（2026-10-02 起）
+## 这 5 个 MCP 为什么在这里（2026-10-02 起 4 个，2026-10-08 起 5 个）
 
 `mcp-camoufox-reverse` / `mcp-jadx` / `mcp-ida` / `mcp-anything-analyzer` 原本挂在 profile 的
 host 层，后果是 `dsh web` **一启动就 spawn 全部 MCP 服务器**：实测 10 个常驻进程、约 300 MB，
@@ -34,15 +34,15 @@ host 层，后果是 `dsh web` **一启动就 spawn 全部 MCP 服务器**：实
 `dsh web` 启动与普通会话零 MCP 进程，只有新开「逆向模式」会话才拉起它们。
 
 代价（明确的取舍）：普通会话不再有 `mcp__camoufox__*` / `mcp__jadx__*` / `mcp__ida__*` /
-`mcp__analyzer__*`；开逆向会话时要等服务器连上（camoufox 冷启动最慢）。
+`mcp__analyzer__*` / `mcp__wireshark__*`；开逆向会话时要等服务器连上（camoufox 冷启动最慢）。
 
 **生命周期**：preset 子树归它的 agent 所有（`dsh-agent-presets/mount` 的 `PresetTree`），
 agent 被拆掉时整棵子树一起 dispose —— 这些 MCP 服务器**随会话结束而退出**，
 不会变成新的常驻空闲进程。代价是每个逆向会话有自己的一份服务器进程
 （并发的逆向会话 = 多份），工具也随会话存亡。
 
-**挂载失败不会拦住会话**：4 行的 `failOnStartupError` 都是 `false`
-（camoufox / ida 用 schema 默认值，jadx / analyzer 显式写），所以服务器连不上时
+**挂载失败不会拦住会话**：5 行的 `failOnStartupError` 都是 `false`
+（camoufox / ida 用 schema 默认值，jadx / analyzer / wireshark-lite 显式写），所以服务器连不上时
 只会**静默少掉工具**，不会让逆向会话创建失败 —— 用工具前先按能力清单探活。
 （能让会话创建失败的只有 composition 语法/结构错误、行引用的包不存在这类硬错误。）
 
@@ -99,9 +99,18 @@ roster 里的 `broken: false` **不算验证**（只做形状检查）。
 - 不要编辑 DSH 部署自带的 preset（`standard` / `ptc` / `minimal` / `cordis`）：升级会覆盖，
   改坏 `cordis` 还会让 preset 创作能力失效。
 - 不要把本机工具路径写进 composition：本机状态由 `$DSH_HOME\reverse\capabilities.md` 提供，
-  那正是"装了新工具不用改 preset"的原因。**唯一例外**是末尾那 4 段 MCP 挂载 ——
+  那正是"装了新工具不用改 preset"的原因。**唯一例外**是末尾那 5 段 MCP 挂载 ——
   挂载行本身就是路径；它们决定"怎么连上服务器"，不决定"本机有什么"。
 - 不要把 analyzer 的 token 明文写回 `agent.cordis.yml`。
+
+## 第 5 个 MCP：wireshark-mcp-lite（2026-10-08）
+
+自研轻量单文件 MCP（`server.py`，FastMCP stdio，10 工具：`open_capture` / `analyze_packets` /
+`packet_statistics` / `io_stat` / `conversation_stats` / `extract_fields` /
+`analyze_protocol` / `capture_live` / `list_interfaces` / `list_protocols`），
+挂载行为 `mcp-wireshark-lite`（`serverName: wireshark` → `mcp__wireshark__*`）。
+项目在 `D:\AI_python\无实际文件区\wireshark-mcp-lite\`（**不进本仓库**，重建见该目录 `HANDOVER.md`）；
+前置是本机 Wireshark 的 tshark。探活先调 `list_protocols`（tshark 缺失只回 `tshark_missing`）。
 
 ## 维护
 

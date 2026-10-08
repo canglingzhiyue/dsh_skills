@@ -427,3 +427,26 @@
     headers: !!js "process.env.ANALYZER_MCP_TOKEN ? { Authorization: 'Bearer ' + process.env.ANALYZER_MCP_TOKEN } : {}"
     toolCallTimeoutMs: 180000
     failOnStartupError: false
+
+# ── 流量分析 MCP（wireshark-mcp-lite，按需启动，2026-10-08）──────────────────
+# 自研轻量单文件 MCP（server.py，10 工具 stdio）：triage 三件套（open/统计/会话）
+# + 字段抽取 + 6 个协议预设 + 实时抓包。融合：jayimu 骨架与 tokens 策略、
+# bx 的 allowed_dirs 隔离思想、sarthak 的 IP 脱敏参数；砍掉 SSE 常驻与 status 页。
+# 项目：D:\AI_python\无实际文件区\wireshark-mcp-lite（uv 管理，HANDOVER 见该目录）。
+# 前置：本机 Wireshark 的 tshark（D:\Program Files\Wireshark\tshark.exe，4.6.4 实测）。
+# failOnStartupError: false —— .venv 缺失等情况下静默失效，不拖累逆向会话创建；
+# 用 mcp__wireshark__* 前先调 list_protocols 探活（tshark 缺失会返回 tshark_missing）。
+# 路径含中文：Node spawn 走 Unicode，无碍；若将来迁移机器，整目录搬走并同步改这里两行。
+- id: mcp-wireshark-lite
+  name: '@deepseek-ai/dsh-mcp-client'
+  config:
+    serverName: wireshark
+    transport: stdio
+    command: 'D:\AI_python\无实际文件区\wireshark-mcp-lite\.venv\Scripts\python.exe'
+    args:
+      - 'D:\AI_python\无实际文件区\wireshark-mcp-lite\server.py'
+    env:
+      PYTHONUTF8: '1'
+      PYTHONIOENCODING: 'utf-8'
+    toolCallTimeoutMs: 120000
+    failOnStartupError: false

@@ -14,6 +14,36 @@
 
 ---
 
+## 2026-10-08 — 新增自研 wireshark-mcp-lite（第 5 个 preset 层按需 MCP）
+
+### 变更类型
+
+install（新 MCP + 已记账 preset 的修改重同步）
+
+### 内容 / 原因
+
+- 用户要求对比 3 家 Wireshark MCP（bx33661 / sarthaksiddha / jayimu）后融合进自己的 MCP，
+  且"安装后不随 dsh 启动、需要时自动触发"。中途用户明确"尽量不要太重" → 放弃 bx 52 工具基座。
+- 新项目 `D:\AI_python\无实际文件区\wireshark-mcp-lite\`（**不进本仓库**）：
+  单文件 `server.py`（FastMCP stdio，10 工具），jayimu 骨架 + bx 的 allowed_dirs 思想 +
+  sarthak 的 anonymize 参数；stdio 冒烟通过（tools/list=10，randpkt 夹具实测；修过
+  `dns.resp.addr` 非法字段真 bug）。
+- `reverse` composition 末尾加 `mcp-wireshark-lite` 行（stdio，`failOnStartupError: false`）：
+  不改 profile、不需重启，新开「逆向模式」会话即生效。前置 = 本机 Wireshark tshark 4.6.4。
+
+### 影响文件
+
+- `SKILLS.md`：表格追加 `wireshark-mcp-lite MCP` 行 + 末尾追加本日日志
+- `presets\reverse\agent.cordis.yml`：重同步（含新增段，SHA256 已核对一致）
+- `presets\reverse\README.md`：4→5 改写 + 新增第 5 个 MCP 小节
+- `INSTALL.md`：reverse 节 / MCP 节（4→5 + 表格行 + 新增 `wireshark MCP` 小节 + 不迁移节）
+
+### 待用户实测
+
+新开「逆向模式」会话，确认 `mcp__wireshark__*`（10 工具）并跑一次真实 pcap。
+
+---
+
 ## 2026-10-08 — DSH 0.2.0-rc.2 升级后双模式恢复：渗透插件 rc.30→rc.36；逆向 preset 改声明式
 
 ### 变更类型

@@ -1092,8 +1092,8 @@ pwsh -NoProfile -File "$env:USERPROFILE\.dsh\skills\reverse-skill-router\scripts
 
 ## reverse（逆向模式 · P2 独立类 · **agent preset**（第四类资产）· 本地自制）
 
-`presets\reverse\` 里是整份副本：`agent.cordis.yml`（24,671 B，2026-10-08 对齐 DSH 0.2.0）+ `preset.yml`（270 B）。
-它是 DSH 自带 `standard` 骨架 + 逆向 persona + 末尾 4 段 MCP 挂载。
+`presets\reverse\` 里是整份副本：`agent.cordis.yml`（2026-10-08 对齐 DSH 0.2.0 后再加第 5 个 MCP）+ `preset.yml`（270 B）。
+它是 DSH 自带 `standard` 骨架 + 逆向 persona + 末尾 5 段 MCP 挂载。
 
 > ⚠️ **DSH 0.2.0 起光复制文件不够**：`.agent-presets\` 目录扫描被移除，preset 必须再在
 > profile 的 `cordis.patch.yml` 里声明一行（本仓库 `config\cordis.patch.yml` 末尾的
@@ -1138,7 +1138,7 @@ LLM provider 等别的内容；用 `install.ps1` 恢复时它整体复制 `confi
    另要确认 composition 里引用的每个包在新版 DSH 里仍然存在（2026-10-08 就抓到过
    `dsh-workflow-worker-thread` 已被删除，换成 `workflow-ptc` 才过）。
 2. **半动态**：`pwsh -File skills\reverse-skill-router\scripts\scan-capabilities.ps1` ——
-   清单里 4 条 MCP 的「层」列应显示 `preset:reverse`；
+   清单里 5 条 MCP 的「层」列应显示 `preset:reverse`；
 3. **真动态（唯一权威）**：**重启 DSH**（preset 声明只在启动期装载），再新开一个会话、
    预设选「逆向模式」。挂载失败会让**会话创建直接失败并回滚**，并指名是哪一行 ——
    所以这一步一出错就是响的，不会静默半组装。
@@ -1179,7 +1179,7 @@ pwsh -NoProfile -File "$env:USERPROFILE\.dsh\skills\reverse-skill-router\scripts
   改坏 `cordis` 还会让 preset 创作能力失效。要改就改用户根下的这一份。
 - **不要**把本机工具路径写进 `agent.cordis.yml`：本机状态一律由能力清单提供（那正是"装了新工具不用改
   preset"的原因）。新工具 → 重跑扫描器。
-  **唯一的例外**是文件末尾那 4 段 MCP 挂载 —— 挂载行本身就是路径（详见「MCP」一节）。
+  **唯一的例外**是文件末尾那 5 段 MCP 挂载 —— 挂载行本身就是路径（详见「MCP」一节）。
   它们决定的是"怎么连上服务器"，不是"本机有什么"；某个 MCP 在不在、能不能用，仍然由能力清单说了算。
 
 ### 维护提醒
@@ -1193,12 +1193,12 @@ pwsh -NoProfile -File "$env:USERPROFILE\.dsh\skills\reverse-skill-router\scripts
 
 ## MCP（P2 独立类 · 网络来源 + 本地运行时）
 
-本机有 **4 个 MCP server**。它们**不是 skill、也不是 npm 插件**，而是一条 DSH 配置
+本机有 **5 个 MCP server**。它们**不是 skill、也不是 npm 插件**，而是一条 DSH 配置
 （`@deepseek-ai/dsh-mcp-client` 的条目）—— 但同样必须迁移，否则新环境会少掉这些工具。
 
 ### 挂在哪一层：`preset` 而不是 `profile`（2026-10-02 起）
 
-**4 个 MCP 全部挂在 agent preset `reverse` 的 `agent.cordis.yml` 里，不再挂在 profile 的
+**5 个 MCP 全部挂在 agent preset `reverse` 的 `agent.cordis.yml` 里，不再挂在 profile 的
 `cordis.patch.yml`。** 两者的差别是**进程何时启动**，不是能不能用：
 
 | 挂载层 | 何时启动 | 可见范围 | 代价 |
@@ -1216,21 +1216,21 @@ pwsh -NoProfile -File "$env:USERPROFILE\.dsh\skills\reverse-skill-router\scripts
 新环境的装法因此变成：**装完 `reverse` preset 就同时装好了 MCP 挂载**（见上文 preset 一节）。
 `config\cordis.patch.yml` 里**不再有** MCP 条目 —— 它是空的 `[]` 加说明注释，留作改回常驻的对照。
 
-⚠️ **改回常驻**：把 `presets\reverse\agent.cordis.yml` 末尾那 4 段（`mcp-camoufox-reverse` /
-`mcp-jadx` / `mcp-ida` / `mcp-anything-analyzer`）整段搬回 profile 的 `cordis.patch.yml`，
+⚠️ **改回常驻**：把 `presets\reverse\agent.cordis.yml` 末尾那 5 段（`mcp-camoufox-reverse` /
+`mcp-jadx` / `mcp-ida` / `mcp-anything-analyzer` / `mcp-wireshark-lite`）整段搬回 profile 的 `cordis.patch.yml`，
 包进 `- insert:` 列表即可。它们本来就是从那里原封不动搬过去的，**只有 analyzer 的
 `headers.Authorization` 从明文 token 改成了 `!!js process.env.ANALYZER_MCP_TOKEN` 引用**（见下）。
 
 ⚠️ **有效期**：MCP 挂在 preset 层后，**普通会话（`standard` 等）里根本没有 `mcp__*` 工具**。
-要用 jadx / IDA / camoufox / analyzer，必须先**新开一个「逆向模式」会话**。
+要用 jadx / IDA / camoufox / analyzer / wireshark，必须先**新开一个「逆向模式」会话**。
 
 **生命周期（新环境的预期）**：preset 子树归它的 agent 所有（`dsh-agent-presets/mount` 的
 `PresetTree`），agent 拆掉时整棵子树一起 dispose —— 所以这些 MCP 服务器**随会话结束而退出**，
 不会变成新的常驻空闲进程。代价是**每个逆向会话都有自己的一份服务器进程**（并发的逆向会话 =
 多份，内存成倍），且开这个会话时要等服务器连上（camoufox 冷启动最慢）。
 
-**挂载失败不会拦住会话**：这 4 行的 `failOnStartupError` 都是 `false`
-（该字段 schema 默认值就是 `false`；jadx / analyzer 显式写、camoufox / ida 用默认值）。
+**挂载失败不会拦住会话**：这 5 行的 `failOnStartupError` 都是 `false`
+（该字段 schema 默认值就是 `false`；jadx / analyzer / wireshark-lite 显式写、camoufox / ida 用默认值）。
 所以服务器连不上时只是**静默少掉工具**，逆向会话仍能创建 —— 用工具前务必按能力清单探活。
 能让会话创建失败的只有硬错误（composition 语法/结构错误、行引用的包不存在）。
 
@@ -1240,8 +1240,9 @@ pwsh -NoProfile -File "$env:USERPROFILE\.dsh\skills\reverse-skill-router\scripts
 | jadx | `jadx` | `mcp__jadx__*` | `D:\AI_python\MCP\MCP合集\jadx-mcp-server`（约 41 MB，见下） |
 | ida | `ida` | `mcp__ida__*` | 本机 IDA 9.4 的 idalib（无独立目录，`uvx` 跑 PyPI 包，见下） |
 | analyzer | `analyzer` | `mcp__analyzer__*` | **Anything Analyzer Electron GUI**（`D:\ProgramsDev\AnythingAnalyzer`，约 300 MB，见下）—— 注意它是**唯一的 `transport: streamable-http` 挂载**，不是 stdio |
+| wireshark | `wireshark` | `mcp__wireshark__*` | 自研 `wireshark-mcp-lite` 单文件（`D:\AI_python\无实际文件区\wireshark-mcp-lite\`，uv，见下）+ 本机 Wireshark 的 tshark |
 
-⚠️ **验证方式随之变化**：`dsh --profile web --dump-config` **再也看不到**这 4 个条目了 ——
+⚠️ **验证方式随之变化**：`dsh --profile web --dump-config` **再也看不到**这 5 个条目了 ——
 `--dump-config` 只打印 host 组装的树，不含 preset composition。改用：
 `pwsh -File skills\reverse-skill-router\scripts\scan-capabilities.ps1`（它同时扫 profile 层与
 preset 层，清单里「层」这一列会标出 `preset:reverse`），或直接在新开的逆向模式会话里看
@@ -1399,6 +1400,32 @@ preset 层，清单里「层」这一列会标出 `preset:reverse`），或直�
   （浏览器侧 CDP 抓包不受此限）。装它是系统级安全变更（`certutil -addstore Root` + 管理员），
   **要用户拍板**。手机侧的步骤与 Android 7+ 的信任限制见 `skills\anything-analyzer\references\setup.md`。
 
+### wireshark MCP（自研轻量单文件，2026-10-08 新增）
+
+- **来源**：本地自制，不搬三家上游代码 —— 只取思想：jayimu/wireshark_mcp 的单文件骨架 +
+  `auto_max_packets` 自适应 + 「先统计后细节」中文 instructions、bx33661/Wireshark-MCP 的
+  `allowed_dirs` 目录隔离、sarthaksiddha/wireshark-mcp 的 `anonymize` 内网 IP 脱敏参数。
+  刻意不要 bx 的 52 工具（用户要求轻量）。项目目录 `D:\AI_python\无实际文件区\wireshark-mcp-lite\`
+  （**不进本仓库**，重建见該目录 `HANDOVER.md`）。
+- **命令**：`D:\AI_python\无实际文件区\wireshark-mcp-lite\.venv\Scripts\python.exe D:\AI_python\无实际文件区\wireshark-mcp-lite\server.py`
+  （stdio，10 工具：`open_capture` / `analyze_packets` / `packet_statistics` / `io_stat` /
+  `conversation_stats` / `extract_fields` / `analyze_protocol(http/dns/tls/tcp-errors/arp/icmp)` /
+  `capture_live` / `list_interfaces` / `list_protocols`）。
+- **外部前置**：本机 Wireshark 的 **tshark**（`D:\Program Files\Wireshark\tshark.exe`，4.6.4 实测；
+  capinfos/editcap/mergecap/text2pcap/dumpcap 全套同目录）。Windows 实时抓包另需 Npcap + 管理员，
+  只读 pcap 不需要。
+- **运行时重建**（项目目录搬回原位后）：
+  ```powershell
+  cd D:\AI_python\无实际文件区\wireshark-mcp-lite
+  C:\Users\y\.local\bin\uv.exe sync        # 清华源（项目内 uv.toml）
+  C:\Users\y\.local\bin\uv.exe run smoke.py # 期望尾行 SMOKE OK
+  ```
+- **验证**：新开「逆向模式」会话出现 `mcp__wireshark__*`；先调 `list_protocols` 探活 ——
+  tshark 缺失只返回 `tshark_missing`，不拦会话创建（`failOnStartupError: false`）。
+  本机实测修过一个真 bug：`dns.resp.addr` 在 tshark 4.6 是非法字段，已换 `dns.a`。
+- **不迁移 / 不备份**：项目 `.venv`（`uv sync` 可重建）、测试夹具 `test-dns.pcap`（randpkt 可重造）。
+  挂载条目在 `presets\reverse\agent.cordis.yml` 的 MCP 段里（`mcp-wireshark-lite`）。
+
 ### context-mode MCP（**已卸载，新环境不要安装**）
 
 **2026-09-29 用户要求整体卸载** —— 实测后认为"用处也不大"。同一批卸载的还有为它写的自动路由插件
@@ -1423,9 +1450,11 @@ preset 层，清单里「层」这一列会标出 `preset:reverse`），或直�
 
 ### 不迁移 / 不备份
 
-**三个** MCP 依赖的运行时（camoufox 的 venv+引擎约 **2.3 GB**、jadx 约 **41 MB**）**只记配方、不备份**；
+**四个** MCP 依赖的运行时（camoufox 的 venv+引擎约 **2.3 GB**、jadx 约 **41 MB**、wireshark-mcp-lite
+的 uv venv 约 30 MB + 本机 Wireshark 本体）**只记配方、不备份**；
 `ida` 没有独立运行时目录（`uvx` 跑 PyPI 包）。
-MCP 的挂载条目在 `presets\reverse\agent.cordis.yml` 里（2026-10-02 起从 profile 层移入，按需启动）。
+MCP 的挂载条目在 `presets\reverse\agent.cordis.yml` 里（2026-10-02 起从 profile 层移入，按需启动；
+2026-10-08 起 5 个，新增 `mcp-wireshark-lite`，配方见上节）。
 JADX-GUI 及其插件、IDA 本体与其 license、
 IDA GUI 插件目录都属于**外部工具**，不在本仓库范围内 —— 需要用户自行安装。
 ---
