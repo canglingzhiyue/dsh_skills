@@ -14,6 +14,48 @@
 
 ---
 
+## 2026-10-08 — DSH 0.2.0-rc.2 升级后双模式恢复：渗透插件 rc.30→rc.36；逆向 preset 改声明式
+
+### 变更类型
+
+插件升级（`dsh-pentest` 到当天最新 rc.36）+ 已记账条目修改（`reverse` preset composition 重排 + profile patch 加声明行）+ 文档（README / INSTALL.md / `config\cordis.patch.yml`）
+
+### 内容
+
+**起因**：用户把 DSH 升到 0.2.0-rc.2 后，会话选择器里「渗透模式」「逆向模式」都不见了。查明是**两个独立原因**：
+
+- **渗透**：插件 `0.1.0-rc.30` 的 peerDependencies pin 死 `0.1.0-rc.6`，新版 DSH 在启动期直接拒载
+  （"it stays installed but profile startup denies it"）。`dsh plugin add <latest-url>` 与 `update`
+  因 lockfile 未变都是 no-op；`remove` 后重 `add` 才真正拉到当天刚发布的 `rc.36`
+  （peer 已放宽到 `^0.1.0-rc.6 || ^0.2.0-rc.1`，上游 rc.34 的修复），重装后不兼容警告消失。
+  历史库 `storages/pentest-sessions.db`（4.2 MB）全程未动，数据不丢。
+- **逆向**：0.2.0 移除了 `.agent-presets\` 的**目录扫描**
+  （`dsh-agent-preset-registry` README 明示 "neither scans directories nor accepts preset paths"），
+  preset 必须是 composition 里的一行 `@deepseek-ai/dsh-agent-preset` 声明。
+  目录里的文件完好（hash 与备份一致）—— 只是没人再来读它了。
+  迁移：composition 按新版 `standard`（`dsh-web-app/presets/standard.patch.yml`）重排
+  （`dsh-workflow-worker-thread` 包在新版已删 → 换 `workflow-ptc`；补新版新增的
+  `tool-plugin-manager`；`tool-ralph` 维持本 preset 原有启用），逆向 persona 与 4 个 MCP 行原样保留；
+  profile patch 末尾加 `preset-reverse` 声明行，用 `cordis:include` 指向原文件
+  （`!!js` 由 include 的 entry-list schema 保留，与 pentest rc.36 的 `preset-root` 同构）。
+- **验证（重启前能做的都做了）**：YAML 语法（23 个顶层 entry、3 个 `!!js` 保留）；
+  36 行 27 个包逐行存在性校验**零缺失**；`dsh --profile web --dump-config` exit 0，
+  `preset-reverse` 与官方 `standard/ptc/minimal/cordis` 并列、其下有 include 路径；
+  include 的 `file:///` 路径可解析到真实文件（24,671 B）。
+- **待用户重启实测**：preset 声明只在启动期装载。重启后新开会话，确认「渗透模式」「逆向模式」
+  都在选择器里，且逆向会话能拉起 MCP（挂载失败会让会话创建直接报错，不会静默半组装）。
+
+### 影响文件
+
+- `presets\reverse\agent.cordis.yml`（22,528 B → 24,671 B；与 `$DSH_HOME\.agent-presets\reverse\` SHA256 一致）
+- `presets\reverse\README.md`（恢复步骤加"写声明行"；表格与维护段同步）
+- `config\cordis.patch.yml`（`[]` → 含 `preset-reverse` 声明行 + 换机器改路径提示）
+- `INSTALL.md`（reverse 节头部/第 2.5 步/验证/实测/维护；头部配套说明与 MCP 安装注）
+- `SKILLS.md`（追加本轮日志）
+- DSH 本机：`profiles\web\node_modules\@howmp\dsh-pentest`（rc.30 → rc.36）、
+  `profiles\web\cordis.patch.yml`（加声明行）、`.agent-presets\reverse\agent.cordis.yml`（重排）
+
+---
 ## 2026-10-02 — 4 个 MCP 从 profile 层移入 agent preset `reverse`：由「启动即拉起」改为「按需启动」
 
 ### 变更类型

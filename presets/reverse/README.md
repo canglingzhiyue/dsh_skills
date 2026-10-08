@@ -11,7 +11,7 @@
 |---|---|---|
 | skill | `$DSH_HOME\skills\<name>\` | 会（本仓库 `skills\` 镜像） |
 | DSH 插件 | profile 的 `package.json` / `bundles` | 会（`install.ps1` 装） |
-| MCP 挂载 | **本 preset 的 `agent.cordis.yml`**（2026-10-02 起；原先在 profile 的 `cordis.patch.yml`） | 会 —— 装 preset 即带上 |
+| MCP 挂载 | **本 preset 的 `agent.cordis.yml`**（2026-10-02 起；原先在 profile 的 `cordis.patch.yml`） | 会 —— 装 preset 即带上（但 DSH 0.2.0 起还要补 profile patch 里那行 `preset-reverse` 声明，否则选择器里看不到） |
 | **agent preset** | `$DSH_HOME\.agent-presets\<id>\` | **不会** —— 只有本目录这份副本能带回去 |
 
 ## 内容
@@ -60,18 +60,30 @@ iOS 与 Windows 域当前为 `shallow` 降级（见 `reverse-skill-router\refere
 
 ## 恢复步骤
 
+> ⚠️ **DSH 0.2.0 起多了一步**：`.agent-presets\` 目录扫描被移除，光复制文件**不够**了 ——
+> 还必须在 profile 的 `cordis.patch.yml` 里加一行 `@deepseek-ai/dsh-agent-preset` 声明，
+> 否则选择器里看不到「逆向模式」。声明行的内容在仓库 `config\cordis.patch.yml`（本机实际
+> 生效版见 `profiles\web\cordis.patch.yml` 末尾的 `preset-reverse` 段）。
+
 ```powershell
 # 1) 复制回 preset 根（MCP 挂载随本目录一起到位）
 New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.dsh\.agent-presets\reverse" | Out-Null
 Copy-Item (Join-Path $PSScriptRoot '*') "$env:USERPROFILE\.dsh\.agent-presets\reverse\" -Force
 
-# 2) 可选：analyzer 的凭据（只在启用鉴权时需要；.env 只在启动时读取）
+# 2) 【DSH 0.2.0 起必需】把仓库 config\cordis.patch.yml 里的 preset-reverse
+#    声明块追加进 profile 的 cordis.patch.yml。
+#    ⚠️ 是"追加"不是"覆盖"—— profile 里可能已有 LLM provider 等别的内容。
+#    用 install.ps1 恢复时这一步自动完成（它整体复制 config\cordis.patch.yml）。
+#    注意声明行里的 file:///C:/Users/y/... 要改成自己的 $DSH_HOME 绝对路径。
+
+# 3) 可选：analyzer 的凭据（只在启用鉴权时需要；.env 只在启动时读取）
 Add-Content "$env:USERPROFILE\.dsh\.env" "`nANALYZER_MCP_TOKEN=<token>"
 
-# 3) 生成能力清单（persona 第一步就要读它）
+# 4) 生成能力清单（persona 第一步就要读它）
 pwsh -NoProfile -File "$env:USERPROFILE\.dsh\skills\reverse-skill-router\scripts\scan-capabilities.ps1"
 
-# 4) 新开一个会话，预设选「逆向模式」，确认 persona 与工具列表（含 mcp__* 工具）
+# 5) 重启 DSH（preset 声明只在启动期装载），再新开一个会话，预设选「逆向模式」，
+#    确认 persona 与工具列表（含 mcp__* 工具）
 ```
 
 ### 关于验证：`preset_probe` 已失效
@@ -95,3 +107,4 @@ roster 里的 `broken: false` **不算验证**（只做形状检查）。
 
 改完 composition：① 重跑能力扫描器（见上）；② 整份复制回本目录并核对 SHA256；
 ③ 在账本 `SKILLS.md` 追加一行日志。**不要**用 `preset_probe`（已不存在）。
+改完 profile patch 的 `preset-reverse` 声明行：同步回仓库 `config\cordis.patch.yml` 对应段。

@@ -3,7 +3,7 @@
 # overrides, disables, and insert lists; `!!js` expressions allowed).
 
 # ---------------------------------------------------------------------------
-# MCP 挂载已移出本层 —— 见文件末尾说明
+# MCP 挂载已移出本层（2026-10-02）—— 见下方说明
 # ---------------------------------------------------------------------------
 # 这里曾经挂着 4 个 MCP：camoufox / jadx / ida / analyzer。
 #
@@ -28,7 +28,40 @@
 # `- insert:` 列表即可 —— 它们就是从这里原封不动搬过去的，只有 analyzer 的
 # `headers.Authorization` 从明文 token 改成了 `!!js process.env.ANALYZER_MCP_TOKEN`
 # 引用（token 现在在 `$DSH_HOME\.env`）。
-#
-# 账本：D:\AI_python\skills_backup\SKILLS.md 的 4 条 MCP 记录 + reverse preset 记录。
 
-[]
+# ---------------------------------------------------------------------------
+# agent preset「逆向模式」的声明行（2026-10-08 新增；DSH 0.2.0 起必需）
+# ---------------------------------------------------------------------------
+# **这一段不能删**：DSH 0.2.0 移除了 `.agent-presets\` 的目录扫描，preset 不再是
+# "一个会被自动发现的目录"，而必须是 composition 里的一行 `@deepseek-ai/dsh-agent-preset`
+# 声明。少了这一行，`presets\reverse\` 即使复制到位也不会出现在会话选择器里
+# —— 这正是 2026-10-08 升级后「逆向模式」消失的原因。
+#
+# 用 `cordis:include` 挂载 `presets\reverse\agent.cordis.yml` 而不是把 400 行内联进来：
+#   * composition 保持独立文件，与账本 `presets\reverse\` 一一对应；
+#   * include 用 entry-list schema 解析，`!!js` 表达式原样保留、仍在各子行自己的
+#     fiber 里求值（analyzer 的 token 引用、platform 判断都照旧）；
+#   * 与 `@howmp/dsh-pentest` 适配 0.2.0 后的 `preset-root` 是同一手法。
+# 官方 `standard` / `ptc` / `minimal` / `cordis` 四个 preset 在 `dsh-web-app` 的
+# `presets\*.patch.yml` 里以同样形状声明，所以这是 DSH 原生机制。
+#
+# `order` 排在官方之后（standard=1, ptc=2, minimal=3, cordis=4）。preset 声明在启动期
+# 装载，改完**必须重启 DSH**才生效。
+#
+# ⚠️ 换机器：下面的 `file:///C:/Users/y/...` 含本机用户名，新环境要改成自己的
+# `$DSH_HOME` 绝对路径（正斜杠、`file:///` 前缀），否则 include 读不到文件、
+# preset 会在启动时报错。同理见 `presets\reverse\agent.cordis.yml` 里的 MCP 路径。
+
+- insert:
+    - id: preset-reverse
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: reverse
+        name: 逆向模式
+        description: 授权目标逆向工程工作流：小程序 / Web / Android 三域现成，iOS 与 Win 预留并按深度降级；开工静默登记授权、能力清单驱动工具选择、产物落纯 ASCII 案件库并按统一验收清单交付。
+        order: 5
+        plugins:
+          - id: reverse-composition
+            name: cordis:include
+            config:
+              path: 'file:///C:/Users/y/.dsh/.agent-presets/reverse/agent.cordis.yml'

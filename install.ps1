@@ -166,6 +166,7 @@ if (-not $SkipConfig) {
   if ($mcp.Count -gt 0) { Ok "MCP 挂载：$($mcp -join '、')" } else { Warn '没扫到任何 MCP 挂载 —— 检查 config 与 presets' }
   Warn '这些 MCP 依赖外部运行时（如 D:\AI_python\camoufox、jadx-mcp-server）—— 见末尾待办'
   Warn 'preset 层的是按需启动：只有新开该 preset 的会话才会拉起；普通会话看不到这些 mcp__* 工具'
+  Warn 'DSH 0.2.0 起选择器靠 profile patch 里的 preset-reverse 声明行认出逆向模式 —— config\cordis.patch.yml 里已带，上面已随 patch 一起写入；但声明行里的 file:///C:/Users/y/... 要改成新环境的路径（见末尾待办 4）'
 } else { Step 4 '恢复 MCP/profile —— 已跳过' }
 
 # ---------------------------------------------------------------- 5. 第三方插件
@@ -223,6 +224,7 @@ Write-Host @'
        camoufox 的 states\ / profiles\ —— 需要重新登录目标站点
   4) 检查并修改硬编码路径
        presets\reverse\agent.cordis.yml 里的 D:\AI_python\... 路径（4 个 MCP 的 command/args 都在这）
+       config\cordis.patch.yml 里 preset-reverse 声明行的 file:///C:/Users/y/... 路径（include 目标，读不到则 preset 启动报错）
        AGENTS.md 顶部的「账本目录」路径
        settings.yaml 里的 provider / baseURL
   4b) analyzer 的凭据（可选，仅在启用鉴权时需要）

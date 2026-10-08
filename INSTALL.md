@@ -17,8 +17,9 @@
 - `SKILLS.md` —— 账本（装过什么、优先级、来源、为什么这样装）
 - `skills\<name>\` —— **全部 skill 的完整内容**（= `$DSH_HOME/skills` 的镜像），直接复制到 skill 根即可
 - `plugins\<name>\RECIPE.md` —— 插件配方（不复制 `node_modules`）
-- `config\` —— 常驻规则 `AGENTS.md`、DSH 设置 `settings.yaml`、profile 配置、**已清空的**
-  `cordis.patch.yml`（MCP 挂载 2026-10-02 起移入 `presets\reverse\`，该文件留作改回常驻的对照）
+- `config\` —— 常驻规则 `AGENTS.md`、DSH 设置 `settings.yaml`、profile 配置、
+  `cordis.patch.yml`（2026-10-08 起**含 `preset-reverse` 声明行**；MCP 挂载 2026-10-02 起移入
+  `presets\reverse\`，该文件另留作改回常驻的对照）
 - `presets\<id>\` —— 用户自建 agent preset 的整份副本（`agent.cordis.yml` + `preset.yml` + `README.md`）；
   **4 个 MCP 的挂载行就在 `presets\reverse\agent.cordis.yml` 里**
 - `README.md` / `CHANGELOG.md` —— 仓库说明 / 变更说明
@@ -47,8 +48,8 @@
      （`dsh plugin --profile <profile> add <spec>`、把那个 `allowBuilds` 键补进 `pnpm-workspace.yaml`、
      核对 profile 的 `dependencies` 与 `dsh.profile.bundles`），**装完必须重启 DSH**。
    - **MCP**：**装 `presets\reverse\` 就同时装好了 MCP 挂载**（4 个 MCP 都在那个 composition 里，
-     2026-10-02 起从 profile 层移入）。所以 MCP **不再**依赖 `config\cordis.patch.yml`——
-     该文件现在是空的 `[]` 加注释，只在"改回常驻"时才用得上。之后按「MCP」小节重建各运行时与外部前置。
+      2026-10-02 起从 profile 层移入）。但 **DSH 0.2.0 起还要写 `config\cordis.patch.yml` 的 `preset-reverse` 声明行**（2026-10-08 新增）——
+      光复制 preset 目录，选择器里看不到它。该文件另留作"改回常驻"的对照。之后按「MCP」小节重建各运行时与外部前置。
      顺序上**先装齐 preset 引用的 5 个技能**（见「MCP」一节开头的说明）再放 preset。
      另外 analyzer 的 token（可选）要写进 `$DSH_HOME\.env`，**重启 DSH 才生效**。
    插件与 preset/MCP 都放在最后装，这样只需重启一次。
@@ -1091,8 +1092,12 @@ pwsh -NoProfile -File "$env:USERPROFILE\.dsh\skills\reverse-skill-router\scripts
 
 ## reverse（逆向模式 · P2 独立类 · **agent preset**（第四类资产）· 本地自制）
 
-`presets\reverse\` 里是整份副本：`agent.cordis.yml`（17,521 B）+ `preset.yml`（270 B）。
-它是 DSH 自带 `standard` 骨架 + 逆向 persona，**没有注册任何服务或工具**，所以不需要 `isolate` realm。
+`presets\reverse\` 里是整份副本：`agent.cordis.yml`（24,671 B，2026-10-08 对齐 DSH 0.2.0）+ `preset.yml`（270 B）。
+它是 DSH 自带 `standard` 骨架 + 逆向 persona + 末尾 4 段 MCP 挂载。
+
+> ⚠️ **DSH 0.2.0 起光复制文件不够**：`.agent-presets\` 目录扫描被移除，preset 必须再在
+> profile 的 `cordis.patch.yml` 里声明一行（本仓库 `config\cordis.patch.yml` 末尾的
+> `preset-reverse` 段）。少了它，选择器里看不到「逆向模式」。
 
 ### 第 1 步：先装齐它引用的 5 个技能
 
@@ -1107,18 +1112,36 @@ Copy-Item "D:\AI_python\skills_backup\presets\reverse\*" `
           "$env:USERPROFILE\.dsh\.agent-presets\reverse\" -Force
 ```
 
+### 第 2.5 步：写 preset 声明行（**DSH 0.2.0 起必需，否则第 5 步里看不到它**）
+
+把本仓库 `config\cordis.patch.yml` 末尾的 `preset-reverse` 声明块**追加**进
+`$DSH_HOME\profiles\web\cordis.patch.yml`（⚠️ 是追加不是覆盖 —— profile 里可能已有
+LLM provider 等别的内容；用 `install.ps1` 恢复时它整体复制 `config\cordis.patch.yml`，
+全新环境直接覆盖即可）。
+声明行用 `cordis:include` 指向第 2 步复制好的 `agent.cordis.yml`，文件形态不用动。
+注意块里的 `file:///C:/Users/y/...` 含本机用户名，换机器要改成自己的 `$DSH_HOME` 绝对路径
+（正斜杠、`file:///` 前缀），否则 include 读不到文件、preset 启动时报错。
+用 `install.ps1` 恢复时这一步自动完成。
+
 ### 第 3 步：验证挂载
 
 **`preset_probe` 工具本机已不存在** —— 它是旧会话里动态定义的 cordis 包，重启即消失、从未落盘，
 所以本清单与 preset README 里旧版的 `preset_probe validate reverse` 步骤**已失效**，不要照做。
 现在按下面的顺序验证（从弱到强）：
 
+0. **声明行在位**：`dsh --profile web --dump-config` 的输出里能找到 `preset-reverse`（与官方
+   `preset-standard` / `preset-ptc` / `preset-minimal` / `preset-cordis` 并列），且其下有
+   `reverse-composition → cordis:include → file:///.../agent.cordis.yml`。
+   找不到 = 第 2.5 步没写对，**不用重启**，先修 patch。
 1. **静态**：用 Loader 真实 YAML 方言解析 composition，并逐行喂给各插件的 Config schema。
    `skills\reverse-skill-router\scripts\scan-capabilities.ps1` 的 preset 段就是同一套解析；
+   另要确认 composition 里引用的每个包在新版 DSH 里仍然存在（2026-10-08 就抓到过
+   `dsh-workflow-worker-thread` 已被删除，换成 `workflow-ptc` 才过）。
 2. **半动态**：`pwsh -File skills\reverse-skill-router\scripts\scan-capabilities.ps1` ——
    清单里 4 条 MCP 的「层」列应显示 `preset:reverse`；
-3. **真动态（唯一权威）**：新开一个会话、预设选「逆向模式」。挂载失败会让**会话创建直接失败并回滚**，
-   并指名是哪一行 —— 所以这一步一出错就是响的，不会静默半组装。
+3. **真动态（唯一权威）**：**重启 DSH**（preset 声明只在启动期装载），再新开一个会话、
+   预设选「逆向模式」。挂载失败会让**会话创建直接失败并回滚**，并指名是哪一行 ——
+   所以这一步一出错就是响的，不会静默半组装。
 
 ⚠️ 注意 roster 里 `broken: false` **不算验证**：它只做形状检查（YAML 能解析、有具名行），
 行引用的包不存在、配置非法、行没激活、服务发布到根 realm 这四种失败它都照过。
@@ -1146,7 +1169,8 @@ pwsh -NoProfile -File "$env:USERPROFILE\.dsh\skills\reverse-skill-router\scripts
 
 ### 第 5 步：实测
 
-新开一个会话、预设选「逆向模式」，确认：persona 生效（简体中文 + 默认已授权 + 开工五步 + 脚本分级）、
+**先重启 DSH**（preset 声明只在启动期装载，不重启选择器里没有它），再新开一个会话、
+预设选「逆向模式」，确认：persona 生效（简体中文 + 默认已授权 + 开工五步 + 脚本分级）、
 工具列表与 `standard` 一致、`reverse-skill-router` 在 catalog 里。
 
 ### 不要做
@@ -1162,6 +1186,8 @@ pwsh -NoProfile -File "$env:USERPROFILE\.dsh\skills\reverse-skill-router\scripts
 
 改完 `agent.cordis.yml`：① 重跑能力扫描器（见第 3 步，`preset_probe` 已失效）；② 重新整份复制回
 `presets\reverse\`（并核对 SHA256）；③ 在 `SKILLS.md` 追加一行日志。`capabilities.md/json` 是**生成物**，不入账本。
+改完 profile patch 的 `preset-reverse` 声明行：同步回仓库 `config\cordis.patch.yml` 对应段
+（DSH 0.2.0 起选择器靠它认出这个 preset，不是靠目录）。
 
 ---
 

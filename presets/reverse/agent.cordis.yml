@@ -1,6 +1,30 @@
 # The `reverse` agent preset — 逆向模式. Authored from the shipped `standard`
 # composition (the full coding agent) plus a reverse-engineering persona.
 #
+# ── 2026-10-08 迁移（DSH 0.1.x → 0.2.0-rc.2）────────────────────────────────
+# DSH 0.2.0 移除了 `.agent-presets\` **目录扫描**：preset 不再是"一个会被自动
+# 发现的目录"，而是 profile 里的一行 `@deepseek-ai/dsh-agent-preset` 声明。
+# 这正是升级后「逆向模式」从选择器里消失的原因（本目录还在、内容没坏，只是
+# 没人再来读它了）。
+#
+# 本文件因此从"被目录扫描发现的 composition"变成"被 include 挂载的 composition"：
+#   profiles\web\cordis.patch.yml
+#     └─ id: preset-reverse   name: '@deepseek-ai/dsh-agent-preset'
+#          config.plugins: [ { name: cordis:include, config.path: file:///.../agent.cordis.yml } ]
+# 文件位置、文件名与内容形态都不变；`!!js` 表达式由 include 的 entry-list
+# schema（`entryListSchema`）原样保留为表达式节点，求值仍发生在各子行自己的
+# fiber 里 —— 所以 `disabled: !!js process.platform === ...` 与 analyzer 的
+# token 表达式照旧可用。
+#
+# 同时对（0.2.0 下的）两处失效行做了对齐：
+#   * `@deepseek-ai/dsh-workflow-worker-thread` 在新版**已被删除** → 换用
+#     `@deepseek-ai/dsh-workflow-ptc`（新版 standard 的同位行，同样 provider: spawn）；
+#   * 新版 standard 新增的 `tool-plugin-manager`（disabled）一并补上，避免这个
+#     preset 比 standard 少一行的漂移。
+# `tool-ralph` 维持本 preset 原有的启用状态（新版 standard 把它默认关掉了）——
+# 目标是"找回原来的模式"，不是"变成新版 standard"；要关就把下面那行的
+# `disabled: true` 打开。
+#
 # Design: the preset carries IDENTITY, HARD RULES, and the MOUNT LINES for the
 # reverse-engineering MCP servers this mode needs. Platform capability (what is
 # installed, which MCP server is actually reachable, which emulator is up) lives
@@ -266,14 +290,17 @@
         backgroundMode: one-shot
         maxDepth: provider-managed
 
-    - id: workflow-worker-thread
-      name: '@deepseek-ai/dsh-workflow-worker-thread'
+    # 2026-10-08：`@deepseek-ai/dsh-workflow-worker-thread` 在 DSH 0.2.0 已删除，
+    # 换用新版 standard 的同位行 `workflow-ptc`（同样 provider: spawn）。
+    - id: workflow-ptc
+      name: '@deepseek-ai/dsh-workflow-ptc'
       config:
         provider: spawn
 
     - id: tool-workflow
       name: '@deepseek-ai/dsh-tool-workflow'
 
+    # 本 preset 沿用原状：启用 ralph（新版 standard 默认 disabled）。
     - id: tool-ralph
       name: '@deepseek-ai/dsh-tool-ralph'
       config:
@@ -300,6 +327,11 @@
 
 - id: present
   name: '@deepseek-ai/dsh-tool-present'
+
+# 2026-10-08：新版 standard 新增的行，补上以免本 preset 与之漂移。
+- id: tool-plugin-manager
+  name: '@deepseek-ai/dsh-plugin-manager/tools'
+  disabled: true
 
 # ── 逆向 MCP（挂在这里 = 按需启动） ─────────────────────────────────────────
 #
