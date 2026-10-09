@@ -1,3 +1,18 @@
+# ══════════════════════════════════════════════════════════════════════════
+# 【已停用 / RETIRED 2026-10-09】本文件不再被 DSH 读取，改这里没有任何效果！
+#
+# 原因：DSH 0.2.0 移除了 .agent-presets\ 目录扫描；cordis:include 外挂方案
+# 也不可行 —— include 会把包名解析基址改写到本文件所在目录，而 .agent-presets\
+# 向上没有任何 node_modules，全部条目解析失败（审计报 "never started"，
+# preset 被标 broken、被会话选择器过滤）。
+#
+# 逆向模式的 composition 现已**全量内联**在 profile patch 的 preset-reverse
+# 声明块里（与官方 standard/ptc/minimal 同一形态）：
+#   C:\Users\y\.dsh\profiles\web\cordis.patch.yml
+# 账本基准：D:\AI_python\skills_backup\config\cordis.patch.yml
+#
+# 本文件保留仅为历史参考，可整个目录删除。
+# ══════════════════════════════════════════════════════════════════════════
 # The `reverse` agent preset — 逆向模式. Authored from the shipped `standard`
 # composition (the full coding agent) plus a reverse-engineering persona.
 #

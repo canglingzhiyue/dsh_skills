@@ -126,8 +126,8 @@ if (-not $SkipPresets) {
       Ok "preset $id（$((Get-ChildItem -Recurse $s -File).Count) 文件）"
     }
     Warn 'preset 只是 composition：它引用的 skill 必须先装好'
-    Warn '本机 4 个逆向 MCP 的挂载就在 presets\reverse\ 里 —— 装 preset 即装好 MCP（按需启动）'
-    Warn '验证挂载请新开一个该 preset 的会话（preset_probe 已不存在）；roster 的 broken:false 不算验证'
+    Warn '本机 5 个逆向 MCP 的挂载内联在 config\cordis.patch.yml 的 preset-reverse 声明块里 —— 写 patch 即装好 MCP；presets\reverse\ 仅为历史参考（0.2.0 起 DSH 不读 .agent-presets\）'
+    Warn '验证挂载请新开一个该 preset 的会话（preset_probe 已不存在）；0.2.0 起 roster 的 broken 字段是真实审计（never started 会点名），无 broken + 会话里看到 mcp__* 才算过'
     Warn '逆向模式的 persona 第一步要读 $DSH_HOME\reverse\capabilities.md —— 需跑一次 scan-capabilities.ps1 生成它'
   }
 } else { Step '2b' '恢复 agent preset —— 已跳过' }
@@ -149,24 +149,26 @@ if (-not $SkipConfig) {
   Copy-IfChanged (Join-Path $Root 'config\profile\package.json')        (Join-Path $profileDir 'package.json')
   Copy-IfChanged (Join-Path $Root 'config\profile\pnpm-workspace.yaml') (Join-Path $profileDir 'pnpm-workspace.yaml')
   Copy-IfChanged (Join-Path $Root 'config\profile\cordis.yml')          (Join-Path $profileDir 'cordis.yml')
-  # MCP 挂载现在有两层：profile（常驻）与 agent preset（按需）。两层都要报，
-  # 否则 2026-10-02 迁移后这里会显示"一个都没有"。
+  # MCP 挂载的现状（2026-10-09 起）：5 个全部内联在 config\cordis.patch.yml 的
+  # preset-reverse 声明块里（0.2.0 起 registry 启动期急切挂载 = 随 dsh 启动拉起，
+  # 但只暴露给逆向模式会话）。presets\*\agent.cordis.yml 是历史参考副本，扫描时按 serverName 去重。
   $mcpSources = @()
   $profilePatch = Join-Path $Root 'config\cordis.patch.yml'
   if (Test-Path $profilePatch) { $mcpSources += $profilePatch }
   $presetsDir = Join-Path $Root 'presets'
   if (Test-Path $presetsDir) { $mcpSources += @(Get-ChildItem $presetsDir -Recurse -Filter 'agent.cordis.yml' -File | Select-Object -ExpandProperty FullName) }
   $mcp = @()
+  $seen = @{}
   foreach ($src in $mcpSources) {
-    $layer = if ($src -eq $profilePatch) { 'profile/常驻' } else { "preset/按需($(Split-Path (Split-Path $src -Parent) -Leaf))" }
+    $layer = if ($src -eq $profilePatch) { 'preset-reverse声明块(内联)/随dsh启动' } else { "preset参考副本($(Split-Path (Split-Path $src -Parent) -Leaf))" }
     $names = (Select-String -Path $src -Pattern 'serverName:\s*''?([A-Za-z0-9_\-]+)' -AllMatches).Matches |
              ForEach-Object { $_.Groups[1].Value }
-    foreach ($n in $names) { $mcp += "$n [$layer]" }
+    foreach ($n in $names) { if (-not $seen.ContainsKey($n)) { $seen[$n] = $true; $mcp += "$n [$layer]" } }
   }
   if ($mcp.Count -gt 0) { Ok "MCP 挂载：$($mcp -join '、')" } else { Warn '没扫到任何 MCP 挂载 —— 检查 config 与 presets' }
   Warn '这些 MCP 依赖外部运行时（如 D:\AI_python\camoufox、jadx-mcp-server）—— 见末尾待办'
-  Warn 'preset 层的是按需启动：只有新开该 preset 的会话才会拉起；普通会话看不到这些 mcp__* 工具'
-  Warn 'DSH 0.2.0 起选择器靠 profile patch 里的 preset-reverse 声明行认出逆向模式 —— config\cordis.patch.yml 里已带，上面已随 patch 一起写入；但声明行里的 file:///C:/Users/y/... 要改成新环境的路径（见末尾待办 4）'
+  Warn '0.2.0 起 MCP 随 dsh 启动拉起（registry 急切挂载所有已声明 preset），只在逆向模式会话里可见；failOnStartupError:false = 连不上不拦启动'
+  Warn 'DSH 0.2.0 起选择器靠 profile patch 里的 preset-reverse 声明块认出逆向模式 —— config\cordis.patch.yml 已内联全量 composition，整文件复制即可，无 file:/// 路径要改'
 } else { Step 4 '恢复 MCP/profile —— 已跳过' }
 
 # ---------------------------------------------------------------- 5. 第三方插件
@@ -223,15 +225,15 @@ Write-Host @'
   3) 登录态（永不进仓库）
        camoufox 的 states\ / profiles\ —— 需要重新登录目标站点
   4) 检查并修改硬编码路径
-       presets\reverse\agent.cordis.yml 里的 D:\AI_python\... 路径（4 个 MCP 的 command/args 都在这）
-       config\cordis.patch.yml 里 preset-reverse 声明行的 file:///C:/Users/y/... 路径（include 目标，读不到则 preset 启动报错）
+       config\cordis.patch.yml 里 preset-reverse 声明块内的 D:\AI_python\... 路径（5 个 MCP 的 command/args 都内联在这）
+       （presets\reverse\agent.cordis.yml 是同内容的历史参考副本，可一并改，但 DSH 0.2.0 起不读它）
        AGENTS.md 顶部的「账本目录」路径
        settings.yaml 里的 provider / baseURL
   4b) analyzer 的凭据（可选，仅在启用鉴权时需要）
        $DSH_HOME\.env 里加 ANALYZER_MCP_TOKEN=<token>（取自 %APPDATA%\anything-analyzer\
        mcp-server-config.json 的 authToken）。**不入仓库**；.env 只在启动时读取 → 需重启 DSH
-  5) 重启 DSH —— 插件在启动时组合（MCP 现在挂在 agent preset 里 = 按需，不需要重启就生效；
-     profile 补丁 patchReload:live 时热加载；插件目录类改动仍需重启）
+  5) 重启 DSH —— 插件与 preset 声明都在启动期组合装载（0.2.0 起 preset 也是启动期急切挂载，
+     5 个 MCP 随启动拉起），装完必须重启一次
 '@ -ForegroundColor Gray
 
 Write-Host "`n完成（自动部分）。" -ForegroundColor White

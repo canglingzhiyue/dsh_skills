@@ -18,10 +18,11 @@
 - `skills\<name>\` —— **全部 skill 的完整内容**（= `$DSH_HOME/skills` 的镜像），直接复制到 skill 根即可
 - `plugins\<name>\RECIPE.md` —— 插件配方（不复制 `node_modules`）
 - `config\` —— 常驻规则 `AGENTS.md`、DSH 设置 `settings.yaml`、profile 配置、
-  `cordis.patch.yml`（2026-10-08 起**含 `preset-reverse` 声明行**；MCP 挂载 2026-10-02 起移入
-  `presets\reverse\`，该文件另留作改回常驻的对照）
-- `presets\<id>\` —— 用户自建 agent preset 的整份副本（`agent.cordis.yml` + `preset.yml` + `README.md`）；
-  **4 个 MCP 的挂载行就在 `presets\reverse\agent.cordis.yml` 里**
+  `cordis.patch.yml`（2026-10-08 起含 `preset-reverse` 声明块；2026-10-09 起声明块内
+  **全量内联** reverse 的 composition（含 5 段 MCP 挂载），不再依赖 `.agent-presets\` 目录）
+- `presets\<id>\` —— 用户自建 agent preset 的整份副本（`agent.cordis.yml` + `preset.yml` + `README.md`）。
+  **注意（2026-10-09 起）**：`presets\reverse\agent.cordis.yml` 已转为**历史参考**（文件头有停用说明），
+  生效的 composition 在 `config\cordis.patch.yml` 的 `preset-reverse` 声明块里，改它才是改 preset。
 - `README.md` / `CHANGELOG.md` —— 仓库说明 / 变更说明
 - `install.ps1` —— 一键恢复脚本
 
@@ -47,9 +48,10 @@
    - **DSH 插件**：**不要**复制到 skill 根。照 `plugins\<name>\RECIPE.md` 执行
      （`dsh plugin --profile <profile> add <spec>`、把那个 `allowBuilds` 键补进 `pnpm-workspace.yaml`、
      核对 profile 的 `dependencies` 与 `dsh.profile.bundles`），**装完必须重启 DSH**。
-   - **MCP**：**装 `presets\reverse\` 就同时装好了 MCP 挂载**（4 个 MCP 都在那个 composition 里，
-      2026-10-02 起从 profile 层移入）。但 **DSH 0.2.0 起还要写 `config\cordis.patch.yml` 的 `preset-reverse` 声明行**（2026-10-08 新增）——
-      光复制 preset 目录，选择器里看不到它。该文件另留作"改回常驻"的对照。之后按「MCP」小节重建各运行时与外部前置。
+   - **MCP**：**装 `reverse` preset 声明块就同时装好了 MCP 挂载**（5 个 MCP 都内联在
+     `config\cordis.patch.yml` 的 `preset-reverse` 声明块里，2026-10-09 起不再依赖 `.agent-presets\` 目录）——
+     把该文件整段追加/复制进 profile 的 `cordis.patch.yml` 即可；少了声明块，选择器里看不到「逆向模式」。
+     之后按「MCP」小节重建各运行时与外部前置。
      顺序上**先装齐 preset 引用的 5 个技能**（见「MCP」一节开头的说明）再放 preset。
      另外 analyzer 的 token（可选）要写进 `$DSH_HOME\.env`，**重启 DSH 才生效**。
    插件与 preset/MCP 都放在最后装，这样只需重启一次。
@@ -1118,9 +1120,11 @@ Copy-Item "D:\AI_python\skills_backup\presets\reverse\*" `
 `$DSH_HOME\profiles\web\cordis.patch.yml`（⚠️ 是追加不是覆盖 —— profile 里可能已有
 LLM provider 等别的内容；用 `install.ps1` 恢复时它整体复制 `config\cordis.patch.yml`，
 全新环境直接覆盖即可）。
-声明行用 `cordis:include` 指向第 2 步复制好的 `agent.cordis.yml`，文件形态不用动。
-注意块里的 `file:///C:/Users/y/...` 含本机用户名，换机器要改成自己的 `$DSH_HOME` 绝对路径
-（正斜杠、`file:///` 前缀），否则 include 读不到文件、preset 启动时报错。
+声明块**不再用 `cordis:include` 外挂文件，而是把 composition 全量内联**（与官方
+`standard.patch.yml` 同构，2026-10-09 起）：include 会把子条目包名的解析基址改到被包含
+文件所在目录，`.agent-presets\` 向上没有 node_modules，全部行解析失败（preset 被标 broken、
+选择器过滤掉）—— 这是 0.2.0 下唯一可行的形态。内联后**没有 file:/// 路径要改**，换机器
+原样追加即可。第 2 步复制的 `agent.cordis.yml` 只作历史参考（DSH 不读它，文件头有停用说明）。
 用 `install.ps1` 恢复时这一步自动完成。
 
 ### 第 3 步：验证挂载
@@ -1129,9 +1133,9 @@ LLM provider 等别的内容；用 `install.ps1` 恢复时它整体复制 `confi
 所以本清单与 preset README 里旧版的 `preset_probe validate reverse` 步骤**已失效**，不要照做。
 现在按下面的顺序验证（从弱到强）：
 
-0. **声明行在位**：`dsh --profile web --dump-config` 的输出里能找到 `preset-reverse`（与官方
-   `preset-standard` / `preset-ptc` / `preset-minimal` / `preset-cordis` 并列），且其下有
-   `reverse-composition → cordis:include → file:///.../agent.cordis.yml`。
+0. **声明块在位**：`dsh --profile web --dump-config` 的输出里能找到 `preset-reverse`（与官方
+   `preset-standard` / `preset-ptc` / `preset-minimal` / `preset-cordis` 并列），且其
+   `config.plugins` 下是内联的 persona / MCP 等条目（不再是 `cordis:include` 引用）。
    找不到 = 第 2.5 步没写对，**不用重启**，先修 patch。
 1. **静态**：用 Loader 真实 YAML 方言解析 composition，并逐行喂给各插件的 Config schema。
    `skills\reverse-skill-router\scripts\scan-capabilities.ps1` 的 preset 段就是同一套解析；
@@ -1184,10 +1188,11 @@ pwsh -NoProfile -File "$env:USERPROFILE\.dsh\skills\reverse-skill-router\scripts
 
 ### 维护提醒
 
-改完 `agent.cordis.yml`：① 重跑能力扫描器（见第 3 步，`preset_probe` 已失效）；② 重新整份复制回
-`presets\reverse\`（并核对 SHA256）；③ 在 `SKILLS.md` 追加一行日志。`capabilities.md/json` 是**生成物**，不入账本。
-改完 profile patch 的 `preset-reverse` 声明行：同步回仓库 `config\cordis.patch.yml` 对应段
-（DSH 0.2.0 起选择器靠它认出这个 preset，不是靠目录）。
+改完 `presets\reverse\agent.cordis.yml`（历史参考副本）：没什么要重跑的 —— DSH 已不读它。
+**真正的维护入口是 profile patch 的 `preset-reverse` 声明块**：改完① 把整段同步回仓库
+`config\cordis.patch.yml`（保持逐字一致，两边都是 LF）；② 重跑能力扫描器；
+③ 在 `SKILLS.md` 追加一行日志。`capabilities.md/json` 是**生成物**，不入账本。
+（DSH 0.2.0 起选择器与挂载都靠这个声明块，不是靠 `.agent-presets\` 目录。）
 
 ---
 
@@ -1196,38 +1201,49 @@ pwsh -NoProfile -File "$env:USERPROFILE\.dsh\skills\reverse-skill-router\scripts
 本机有 **5 个 MCP server**。它们**不是 skill、也不是 npm 插件**，而是一条 DSH 配置
 （`@deepseek-ai/dsh-mcp-client` 的条目）—— 但同样必须迁移，否则新环境会少掉这些工具。
 
-### 挂在哪一层：`preset` 而不是 `profile`（2026-10-02 起）
+### 挂在哪一层：`preset` 而不是 `profile`（2026-10-02 起；0.2.0 后语义有变）
 
-**5 个 MCP 全部挂在 agent preset `reverse` 的 `agent.cordis.yml` 里，不再挂在 profile 的
-`cordis.patch.yml`。** 两者的差别是**进程何时启动**，不是能不能用：
+**5 个 MCP 全部挂在 agent preset `reverse` 的 composition 里（2026-10-09 起随声明块内联在
+profile patch 的 `preset-reverse` 段），不再以独立条目挂在 profile 层。** 两者的差别是
+**进程何时启动**，不是能不能用：
 
 | 挂载层 | 何时启动 | 可见范围 | 代价 |
 |---|---|---|---|
 | profile（host 组装） | `dsh web` 一启动就 spawn 全部 | 所有会话 | 常驻进程 + 启动期同步等待 |
-| **preset（现在）** | **只有新会话真的选中该 preset 时才启动** | 只有该 preset 的会话 | 开该 preset 会话时要等服务器连上 |
+| **preset（现在）** | **DSH ≤0.1：只有新会话选中才启动；DSH 0.2.0 起：registry 启动期急切挂载所有已声明 preset（实测，2026-10-09），等同于随 dsh 启动** | 只有该 preset 的会话 | 0.2.0 起回到"随启动拉起"，但连不上不拦启动（failOnStartupError: false） |
 
 为什么必须改：原先挂 profile 层时，`dsh web` 启动后 9~13 秒内 spawn 出 **10 个进程、约 300 MB**
 （camoufox 2 个 python、jadx uv+2 python、ida uvx+uv+ida-mcp+2 python），且
 `dsh-mcp-client` 的 `apply()` 会**同步等待「连接 + `tools/list`」完成**才让条目激活 ——
 它的 Config schema 里**没有任何懒加载字段**，启动与发现超时又直接继承 MCP SDK 的 60 s。
-所以要按需启动，只能换挂载层：**preset 是 DSH 里唯一的惰性挂载点**
+所以要按需启动，只能换挂载层：preset 曾是 DSH 里唯一的惰性挂载点
 （`dsh-agent-presets` 的 "reading never mounts" —— 读文件不会挂载，只有新会话选中才 compose）。
 
-新环境的装法因此变成：**装完 `reverse` preset 就同时装好了 MCP 挂载**（见上文 preset 一节）。
-`config\cordis.patch.yml` 里**不再有** MCP 条目 —— 它是空的 `[]` 加说明注释，留作改回常驻的对照。
+> ⚠️ **DSH 0.2.0-rc.2 起这个惰性语义已不存在（2026-10-09 实测）**：新版 registry 在启动期
+> 急切挂载所有已声明 preset（roster 上先挂好、会话选择时复用），5 个 MCP 随 `dsh web` 启动拉起，
+> 进程形态回到 2026-10-02 之前的常驻模式（差别：连不上不拦启动）。preset 层现在仍有意义
+> —— 工具只暴露给逆向会话、不污染普通会话 —— 但"省进程"的收益在 0.2.0 下没有了。
+> 若未来想追回，属上游（dsh-agent-preset-registry）的 lazy-mount 特性请求。
 
-⚠️ **改回常驻**：把 `presets\reverse\agent.cordis.yml` 末尾那 5 段（`mcp-camoufox-reverse` /
-`mcp-jadx` / `mcp-ida` / `mcp-anything-analyzer` / `mcp-wireshark-lite`）整段搬回 profile 的 `cordis.patch.yml`，
-包进 `- insert:` 列表即可。它们本来就是从那里原封不动搬过去的，**只有 analyzer 的
+新环境的装法因此变成：**装完 `reverse` preset 声明块就同时装好了 MCP 挂载**（见上文 preset 一节）。
+`config\cordis.patch.yml` 里的 5 段 MCP 不再以独立 `insert` 条目出现 —— 它们内联在
+`preset-reverse` 声明块的 `config.plugins` 里。
+
+⚠️ **改回常驻**：把声明块 `config.plugins` 末尾那 5 段（`mcp-camoufox-reverse` /
+`mcp-jadx` / `mcp-ida` / `mcp-anything-analyzer` / `mcp-wireshark-lite`）整段搬出来、
+包进 profile patch 顶层的 `- insert:` 列表即可（历史副本在 `presets\reverse\agent.cordis.yml`
+末尾）。**只有 analyzer 的
 `headers.Authorization` 从明文 token 改成了 `!!js process.env.ANALYZER_MCP_TOKEN` 引用**（见下）。
 
 ⚠️ **有效期**：MCP 挂在 preset 层后，**普通会话（`standard` 等）里根本没有 `mcp__*` 工具**。
 要用 jadx / IDA / camoufox / analyzer / wireshark，必须先**新开一个「逆向模式」会话**。
 
-**生命周期（新环境的预期）**：preset 子树归它的 agent 所有（`dsh-agent-presets/mount` 的
+**生命周期（新环境的预期）**：preset 子树归它的 agent 所有（`dsh-agent-preset-registry/mount` 的
 `PresetTree`），agent 拆掉时整棵子树一起 dispose —— 所以这些 MCP 服务器**随会话结束而退出**，
 不会变成新的常驻空闲进程。代价是**每个逆向会话都有自己的一份服务器进程**（并发的逆向会话 =
-多份，内存成倍），且开这个会话时要等服务器连上（camoufox 冷启动最慢）。
+多份，内存成倍）。但注意：DSH 0.2.0 起 registry 在**启动期**就为每个已声明 preset 挂好一版
+（eager mount，2026-10-09 实测），所以"启动时就有一份服务器进程"是当前现实，随会话退出回收
+的那份是每会话独立挂载之外的另一份语义 —— 以实测进程数为准。
 
 **挂载失败不会拦住会话**：这 5 行的 `failOnStartupError` 都是 `false`
 （该字段 schema 默认值就是 `false`；jadx / analyzer / wireshark-lite 显式写、camoufox / ida 用默认值）。

@@ -14,6 +14,14 @@
 
 ---
 
+## 2026-10-09 —— fix: reverse preset 0.2.0 适配（声明内联化，选择器可见性修复）
+
+- **变更类型**：fix（兼容性适配）
+- **内容**：DSH 0.2.0 起 `cordis:include` 会把子条目包名的解析基址改到被包含文件自己的目录，`.agent-presets\reverse\` 向上没有 node_modules → 35 行全部解析失败，注册表审计报 "never started" → preset 标 `broken` → 会话选择器过滤掉（渗透插件的 include 之所以可行，是因为它的文件恰好在 profile 的 node_modules 里）。修复：按官方 `standard.patch.yml` 同构，把 composition **全量内联**进 `config\cordis.patch.yml` 的 `preset-reverse` 声明块（plugins 列表）。实测：测试实例 roster 里 `reverse` 与 `pentest` 均健康、无 broken；5 个 MCP 随启动拉起（0.2.0 起 registry 急切挂载所有已声明 preset，按需语义已失效，属架构现实）。
+- **原因**：用户报告升级 0.2.0 后「逆向模式」从选择器消失，要求"不兼容就修改适配"。
+- **影响文件**：`config\cordis.patch.yml`（声明块改为全量内联）、`presets\reverse\agent.cordis.yml`（顶部加【已停用】头注释，保留为历史参考）、`presets\reverse\README.md`（挂载位置与恢复步骤更新）、`SKILLS.md`（顺带去掉另一会话误贴的重复 iv8 日志行，内容不动）。
+- **注意**：`config\cordis.patch.yml` 现在是 reverse preset 的唯一权威源；换机恢复只需整文件复制，无需再处理 file:/// 路径。
+
 ## 2026-10-08 — 新增自研 wireshark-mcp-lite（第 5 个 preset 层按需 MCP）
 
 ### 变更类型

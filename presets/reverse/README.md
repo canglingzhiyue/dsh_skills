@@ -11,7 +11,7 @@
 |---|---|---|
 | skill | `$DSH_HOME\skills\<name>\` | 会（本仓库 `skills\` 镜像） |
 | DSH 插件 | profile 的 `package.json` / `bundles` | 会（`install.ps1` 装） |
-| MCP 挂载 | **本 preset 的 `agent.cordis.yml`**（2026-10-02 起；原先在 profile 的 `cordis.patch.yml`） | 会 —— 装 preset 即带上（但 DSH 0.2.0 起还要补 profile patch 里那行 `preset-reverse` 声明，否则选择器里看不到） |
+| MCP 挂载 | **profile patch 的 `preset-reverse` 声明块（内联 composition）**（2026-10-02 起在 preset；2026-10-09 起随 0.2.0 适配改为内联） | 会 —— 装 preset 即带上（DSH 0.2.0 起必须同时带 `preset-reverse` 声明块，否则选择器里看不到） |
 | **agent preset** | `$DSH_HOME\.agent-presets\<id>\` | **不会** —— 只有本目录这份副本能带回去 |
 
 ## 内容
@@ -29,9 +29,14 @@ host 层，后果是 `dsh web` **一启动就 spawn 全部 MCP 服务器**：实
 （它的 Config schema 里没有懒加载字段，启动与发现超时又直接继承 MCP SDK 的 60 s）
 —— 启动卡顿由此而来。
 
-**preset 是 DSH 里唯一的惰性挂载点**（`dsh-agent-presets` 的 "reading never mounts"：
+**preset 曾是 DSH 里唯一的惰性挂载点**（`dsh-agent-presets` 的 "reading never mounts"：
 读文件不会挂载，只有新会话真的选中才 compose），所以搬到这里就实现了按需：
 `dsh web` 启动与普通会话零 MCP 进程，只有新开「逆向模式」会话才拉起它们。
+
+> ⚠️ **DSH 0.2.0-rc.2 起按需语义已失效（2026-10-09 实测）**：registry 改为**启动期急切挂载**
+> 所有已声明 preset（roster 上先挂好，会话选择时直接复用）—— `dsh web` 启动即拉起末尾
+> 5 个 MCP 服务器（全部 `failOnStartupError: false`，连不上只是静默少工具，不影响启动）。
+> 若连回旧语义（选中才挂载）值得争取，属上游 issue；当前形态与官方四个 preset 完全一致。
 
 代价（明确的取舍）：普通会话不再有 `mcp__camoufox__*` / `mcp__jadx__*` / `mcp__ida__*` /
 `mcp__analyzer__*` / `mcp__wireshark__*`；开逆向会话时要等服务器连上（camoufox 冷启动最慢）。
@@ -71,10 +76,12 @@ New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.dsh\.agent-presets\
 Copy-Item (Join-Path $PSScriptRoot '*') "$env:USERPROFILE\.dsh\.agent-presets\reverse\" -Force
 
 # 2) 【DSH 0.2.0 起必需】把仓库 config\cordis.patch.yml 里的 preset-reverse
-#    声明块追加进 profile 的 cordis.patch.yml。
+#    声明块（内含**全量内联**的 composition）追加进 profile 的 cordis.patch.yml。
 #    ⚠️ 是"追加"不是"覆盖"—— profile 里可能已有 LLM provider 等别的内容。
 #    用 install.ps1 恢复时这一步自动完成（它整体复制 config\cordis.patch.yml）。
-#    注意声明行里的 file:///C:/Users/y/... 要改成自己的 $DSH_HOME 绝对路径。
+#    ⚠️ 2026-10-09 起是内联形态（与官方 standard.patch.yml 同构）：不再引用
+#    file:/// 路径，因此无需改路径；上面第 1 步复制的 agent.cordis.yml 只作
+#    历史参考，DSH 不会读它（文件头有停用说明）。
 
 # 3) 可选：analyzer 的凭据（只在启用鉴权时需要；.env 只在启动时读取）
 Add-Content "$env:USERPROFILE\.dsh\.env" "`nANALYZER_MCP_TOKEN=<token>"
