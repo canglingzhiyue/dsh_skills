@@ -29,6 +29,117 @@
 # `headers.Authorization` 从明文 token 改成了 `!!js process.env.ANALYZER_MCP_TOKEN`
 # 引用（token 现在在 `$DSH_HOME\.env`）。
 
+- id: llm-pi-ai
+  name: "@deepseek-ai/dsh-llm-pi-ai"
+  config:
+    providers:
+      claudex:
+        displayName: claudex
+        apiKeyEnv: CLAUDEX_API_KEY
+        api: openai-completions
+        baseURL: https://claudex.org/v1
+        models:
+          - id: deepseek-v4.1-flash
+            name: deepseek-v4.1-flash
+            reasoningEfforts: false
+          - id: deepseek-v4-pro
+            name: deepseek-v4-pro
+            reasoningEfforts:
+              off: null
+              high: high
+              max: max
+          - id: kimi-k3
+            name: kimi-k3
+      a-lang:
+        displayName: alang
+        apiKeyEnv: A_LANG_API_KEY
+        api: openai-completions
+        baseURL: https://langlangya.dpdns.org/v1
+        models:
+          - id: deepseek-v4.1-flash
+            name: deepseek-v4.1-flash
+            reasoningEfforts:
+              off: none
+              low: low
+              medium: medium
+              high: high
+              max: max
+          - id: glm-5.3-flash
+            name: glm-5.3-flash
+            reasoningEfforts:
+              off: none
+              high: high
+              max: max
+      lesec:
+        displayName: lesec
+        apiKeyEnv: LESEC_API_KEY
+        api: openai-completions
+        baseURL: https://ai.lesec.top/v1
+        models:
+          - id: cn:deepseek-v4.1-flash
+            name: cn:deepseek-v4.1-flash
+            reasoningEfforts:
+              off: none
+              low: low
+              medium: medium
+              high: high
+              max: max
+          - id: deepseek-v4.1-flash
+            name: deepseek-v4.1-flash
+            reasoningEfforts:
+              off: none
+              low: low
+              medium: medium
+              high: high
+              max: max
+      ok88:
+        displayName: 88ok
+        apiKeyEnv: OK88_API_KEY
+        api: openai-completions
+        baseURL: https://8888ok.cc/v1
+        models:
+          - id: deepseek-v4.1-flash
+            name: deepseek-v4.1-flash
+            reasoningEfforts:
+              off: none
+              low: low
+              medium: medium
+              high: high
+              max: max
+- id: agent-default-model
+  name: "@deepseek-ai/dsh-agent-default-model"
+  config:
+    provider: claudex
+    model: kimi-k3
+- id: ui-settings-general
+  name: "@deepseek-ai/dsh-client-ui-settings-general"
+  config:
+    welcomeNoticeVersion: 2026-09-28.1
+- id: ui-conversation
+  name: "@deepseek-ai/dsh-client-ui-conversation"
+  config:
+    busyEnter: steer
+
+# ---------------------------------------------------------------------------
+# agent preset：逆向模式（2026-10-08 迁移到声明式）
+# ---------------------------------------------------------------------------
+# DSH 0.2.0 移除了 `.agent-presets\` 的**目录扫描** —— preset 不再是"一个会被自动
+# 发现的目录"，而必须是 composition 里的一行 `@deepseek-ai/dsh-agent-preset` 声明。
+# 这正是升级后「逆向模式」从会话选择器消失的原因：目录还在、内容没坏，只是没人读了。
+#
+# 这里用 `cordis:include` 挂载原来那份文件，而不是把 400 行 composition 内联进来：
+#   * 文件位置与形态不变（`$DSH_HOME\.agent-presets\reverse\agent.cordis.yml`），
+#     备份账本 `presets\reverse\` 的结构不用动；
+#   * include 用 entry-list schema 解析，`!!js` 表达式原样保留为表达式节点、仍在
+#     各子行自己的 fiber 里求值（analyzer 的 token 引用、platform 判断都照旧）；
+#   * 与 `@howmp/dsh-pentest` 适配 0.2.0 后的 `preset-root` 是同一手法 —— 它提交的
+#     也是 `plugins: [ cordis:include → 包内 agent.cordis.yml ]`。
+# 官方 `standard` / `ptc` / `minimal` / `cordis` 四个 preset 就在 `dsh-web-app` 的
+# `presets\*.patch.yml` 里以同样形状内联声明，所以这是 DSH 原生机制，不是 hack。
+#
+# `order` 排在官方之后（standard=1, ptc=2, minimal=3, cordis=4）；`config.name` 是
+# 选择器里显示的名字。preset 声明在启动期装载，改完必须重启 DSH 才生效。
+# 账本：D:\AI_python\skills_backup\SKILLS.md 的 reverse preset 记录。
 # ---------------------------------------------------------------------------
 # agent preset：逆向模式（2026-10-08 声明式迁移；2026-10-09 从内嵌文件改为全量内联）
 # ---------------------------------------------------------------------------

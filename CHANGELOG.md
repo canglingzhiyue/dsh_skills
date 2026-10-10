@@ -14,6 +14,26 @@
 
 ---
 
+## 2026-10-10 —— fix: 恢复被「账本回灌」抹掉的第三方 API provider 配置
+
+- **变更类型**：fix（数据恢复 + 账本缺陷修复）
+- **事故**：2026-10-09 处理 probe 污染时，用 `Copy-Item 账本 → live` 覆盖了 profile patch。
+  当时的账本 `config\cordis.patch.yml` 是**精简版**（只有 preset-reverse 声明），
+  于是 live 独有的 4 行 host 配置被整段截掉：
+  `llm-pi-ai`（4 个第三方 provider：claudex / a-lang / lesec / ok88）、
+  `agent-default-model`（被重置为内置 `deepseek-account`/`deepseek-flash`）、
+  `ui-settings-general`、`ui-conversation`。
+  症状：默认模型不再是 `claudex/kimi-k3`，第三方 API 在设置里消失。
+- **恢复**：从 `cordis.patch.yml.before-inline`（2026-10-09 12:09，唯一仍含 llm-pi-ai 的
+  备份，在本机 `D:\AI_python\无实际文件区\reverse-preset-migration-backup\`）提取那 4 行并合回
+  live。**API key 本体一直在 `.credentials.yaml`，全程未受影响**。
+  验证：`--dump-config` exit 0、4 个 provider 齐、默认 `claudex/kimi-k3`、无重复 id。
+- **账本缺陷修复（根因）**：账本 `config\cordis.patch.yml` 此前**12 个历史版本全都没有
+  llm-pi-ai** —— 它不是 live 的镜像而是子集，所以从它回灌必然丢东西。
+  现在账本是 live 的**完整镜像**（含 llm-pi-ai / agent-default-model / 两条 ui-*）。
+- **教训**：`config\` 是 profile patch 层的备份基准，**不能只放子集**；
+  从账本回灌 profile patch 之前必须确认「账本 ⊇ live」，并先备份 live。
+
 ## 2026-10-09 —— fix: MCP 启动时机回退（新增自研插件 reverse-mcp-activator）
 
 - **变更类型**：fix（架构适配 + 新增自研件）
