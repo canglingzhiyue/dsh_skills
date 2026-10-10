@@ -126,11 +126,26 @@ if (-not $SkipPresets) {
       Ok "preset $id（$((Get-ChildItem -Recurse $s -File).Count) 文件）"
     }
     Warn 'preset 只是 composition：它引用的 skill 必须先装好'
-    Warn '本机 5 个逆向 MCP 的挂载内联在 config\cordis.patch.yml 的 preset-reverse 声明块里 —— 写 patch 即装好 MCP；presets\reverse\ 仅为历史参考（0.2.0 起 DSH 不读 .agent-presets\）'
-    Warn '验证挂载请新开一个该 preset 的会话（preset_probe 已不存在）；0.2.0 起 roster 的 broken 字段是真实审计（never started 会点名），无 broken + 会话里看到 mcp__* 才算过'
+    Warn 'MCP 已不在 preset 里（0.2.0 下写在 composition 里就必然随 dsh 启动拉起）—— 见下一步 2c 与「MCP」一节'
+    Warn '真实验证看三个方向：启动日志零 MCP + 逆向会话出现 mcp__* + 普通会话不出现（preset_probe 已不存在）'
     Warn '逆向模式的 persona 第一步要读 $DSH_HOME\reverse\capabilities.md —— 需跑一次 scan-capabilities.ps1 生成它'
   }
 } else { Step '2b' '恢复 agent preset —— 已跳过' }
+
+# ------------------------------------------------- 2c. reverse-mcp-activator（自研插件）
+if (-not $SkipPresets) {
+  Step '2c' '恢复 reverse-mcp-activator 插件源码 → $DSH_HOME/plugins/'
+  $activatorSrc = Join-Path $Root 'plugins\reverse-mcp-activator'
+  $activatorDst = Join-Path $DshHome 'plugins\reverse-mcp-activator'
+  if (-not (Test-Path $activatorSrc)) { Warn '仓库里没有 plugins\reverse-mcp-activator\，跳过（逆向会话将没有 MCP 工具）' }
+  elseif ($DryRun) { Info "将复制插件 → $activatorDst" }
+  else {
+    New-Item -ItemType Directory -Force -Path $activatorDst | Out-Null
+    Copy-Item "$activatorSrc\*" $activatorDst -Recurse -Force
+    Ok "reverse-mcp-activator（$((Get-ChildItem -Recurse $activatorSrc -File).Count) 文件）"
+    Warn 'profile patch 里 activator 的 name(file:/// 绝对路径) 与各 server 的 command/args 要按新环境改'
+  }
+} else { Step '2c' '恢复 activator 插件 —— 已跳过' }
 
 # ---------------------------------------------------------------- 3. 常驻规则 + DSH 设置
 if (-not $SkipConfig) {
@@ -149,9 +164,10 @@ if (-not $SkipConfig) {
   Copy-IfChanged (Join-Path $Root 'config\profile\package.json')        (Join-Path $profileDir 'package.json')
   Copy-IfChanged (Join-Path $Root 'config\profile\pnpm-workspace.yaml') (Join-Path $profileDir 'pnpm-workspace.yaml')
   Copy-IfChanged (Join-Path $Root 'config\profile\cordis.yml')          (Join-Path $profileDir 'cordis.yml')
-  # MCP 挂载的现状（2026-10-09 起）：5 个全部内联在 config\cordis.patch.yml 的
-  # preset-reverse 声明块里（0.2.0 起 registry 启动期急切挂载 = 随 dsh 启动拉起，
-  # 但只暴露给逆向模式会话）。presets\*\agent.cordis.yml 是历史参考副本，扫描时按 serverName 去重。
+  # MCP 挂载的现状（2026-10-09 起）：配置在 config\cordis.patch.yml 的
+  # reverse-mcp-activator 行的 config.servers 里；由插件在**逆向模式会话创建时**
+  # 按需挂到该会话作用域（0.2.0 起写在 composition 里必然随 dsh 启动拉起，故挪出）。
+  # presets\*\agent.cordis.yml 是历史参考副本，扫描时按 serverName 去重。
   $mcpSources = @()
   $profilePatch = Join-Path $Root 'config\cordis.patch.yml'
   if (Test-Path $profilePatch) { $mcpSources += $profilePatch }
@@ -160,15 +176,15 @@ if (-not $SkipConfig) {
   $mcp = @()
   $seen = @{}
   foreach ($src in $mcpSources) {
-    $layer = if ($src -eq $profilePatch) { 'preset-reverse声明块(内联)/随dsh启动' } else { "preset参考副本($(Split-Path (Split-Path $src -Parent) -Leaf))" }
+    $layer = if ($src -eq $profilePatch) { 'activator/会话创建时按需' } else { "preset参考副本($(Split-Path (Split-Path $src -Parent) -Leaf))" }
     $names = (Select-String -Path $src -Pattern 'serverName:\s*''?([A-Za-z0-9_\-]+)' -AllMatches).Matches |
              ForEach-Object { $_.Groups[1].Value }
     foreach ($n in $names) { if (-not $seen.ContainsKey($n)) { $seen[$n] = $true; $mcp += "$n [$layer]" } }
   }
   if ($mcp.Count -gt 0) { Ok "MCP 挂载：$($mcp -join '、')" } else { Warn '没扫到任何 MCP 挂载 —— 检查 config 与 presets' }
   Warn '这些 MCP 依赖外部运行时（如 D:\AI_python\camoufox、jadx-mcp-server）—— 见末尾待办'
-  Warn '0.2.0 起 MCP 随 dsh 启动拉起（registry 急切挂载所有已声明 preset），只在逆向模式会话里可见；failOnStartupError:false = 连不上不拦启动'
-  Warn 'DSH 0.2.0 起选择器靠 profile patch 里的 preset-reverse 声明块认出逆向模式 —— config\cordis.patch.yml 已内联全量 composition，整文件复制即可，无 file:/// 路径要改'
+  Warn 'MCP 由 reverse-mcp-activator 在**逆向模式会话创建时**挂载：启动与普通会话零 MCP，只有逆向会话可见；failOnStartupError:false = 连不上不拦会话'
+  Warn 'DSH 0.2.0 起选择器靠 profile patch 的 preset-reverse 声明块认出逆向模式 —— config\cordis.patch.yml 已内联全量 composition，整文件复制即可'
 } else { Step 4 '恢复 MCP/profile —— 已跳过' }
 
 # ---------------------------------------------------------------- 5. 第三方插件
@@ -225,15 +241,16 @@ Write-Host @'
   3) 登录态（永不进仓库）
        camoufox 的 states\ / profiles\ —— 需要重新登录目标站点
   4) 检查并修改硬编码路径
-       config\cordis.patch.yml 里 preset-reverse 声明块内的 D:\AI_python\... 路径（5 个 MCP 的 command/args 都内联在这）
+       config\cordis.patch.yml 里 reverse-mcp-activator 行的 name（file:/// 绝对路径）
+       同一行 config.servers 下 5 个 MCP 的 command/args 绝对路径
        （presets\reverse\agent.cordis.yml 是同内容的历史参考副本，可一并改，但 DSH 0.2.0 起不读它）
        AGENTS.md 顶部的「账本目录」路径
        settings.yaml 里的 provider / baseURL
   4b) analyzer 的凭据（可选，仅在启用鉴权时需要）
        $DSH_HOME\.env 里加 ANALYZER_MCP_TOKEN=<token>（取自 %APPDATA%\anything-analyzer\
        mcp-server-config.json 的 authToken）。**不入仓库**；.env 只在启动时读取 → 需重启 DSH
-  5) 重启 DSH —— 插件与 preset 声明都在启动期组合装载（0.2.0 起 preset 也是启动期急切挂载，
-     5 个 MCP 随启动拉起），装完必须重启一次
+  5) 重启 DSH —— 插件、preset 声明都在启动期组合装载，装完必须重启一次。
+     重启后按三个方向验证：启动日志零 MCP / 逆向会话出现 mcp__* / 普通会话不出现
 '@ -ForegroundColor Gray
 
 Write-Host "`n完成（自动部分）。" -ForegroundColor White

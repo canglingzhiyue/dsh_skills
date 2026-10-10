@@ -14,6 +14,22 @@
 
 ---
 
+## 2026-10-09 —— fix: MCP 启动时机回退（新增自研插件 reverse-mcp-activator）
+
+- **变更类型**：fix（架构适配 + 新增自研件）
+- **内容**：上一轮把 reverse composition 全量内联进 profile patch 后，preset 由 broken 转健康，
+  但暴露出 0.2.0 的另一个行为变化：registry **启动期急切挂载所有已声明 preset**，于是 5 个 MCP
+  随 `dsh web` 一起拉起（IDA 的 uvx 在无代理时反复重试 PyPI，6×~17s，日志刷屏）。
+  本轮把 MCP 挂载从 composition 移出，改由自研插件 `reverse-mcp-activator` 在
+  **逆向模式会话创建时**挂到该会话自己的作用域上：新增 `plugins\reverse-mcp-activator\`
+  （源码 + RECIPE），`config\cordis.patch.yml` 新增该插件行（5 个 server 的配置原样迁入其
+  `config.servers`），preset 声明块回归纯 composition。
+- **实测（隔离 HOME，用生产配置原样跑）**：启动后 0 个 MCP；普通会话 0 个；逆向会话按需拉起
+  （wireshark + jadx 已连上）；工具落在会话作用域（全局视图 0 个 `mcp__*`）。
+- **原因**：用户反馈"修复把系统修坏了，MCP 又随系统启动了"。
+- **影响文件**：`plugins\reverse-mcp-activator\`（新增）、`config\cordis.patch.yml`、
+  `presets\reverse\README.md`、`INSTALL.md`、`install.ps1`、`SKILLS.md`。
+
 ## 2026-10-09 —— fix: reverse preset 0.2.0 适配（声明内联化，选择器可见性修复）
 
 - **变更类型**：fix（兼容性适配）

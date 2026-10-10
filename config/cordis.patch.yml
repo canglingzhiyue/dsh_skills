@@ -370,121 +370,94 @@
             name: '@deepseek-ai/dsh-plugin-manager/tools'
             disabled: true
 
-          # ── 逆向 MCP（挂在这里 = 按需启动） ─────────────────────────────────────────
-          #
-          # 这 4 行原先挂在 profile 的 host 层（`profiles\web\cordis.patch.yml`），后果是
-          # `dsh web` 一启动就 spawn 全部 MCP 服务器：3 条 stdio 链共 10 个进程、约 300 MB
-          # 常驻；而 `dsh-mcp-client` 的 `apply()` 会**同步等待「连接 + tools/list」完成**
-          # 才让条目激活，且它的 Config schema 里没有任何懒加载字段、启动与发现超时又直接
-          # 继承 MCP SDK —— 启动期的卡顿主要来自这里，且无法靠配置消除。
-          #
-          # 挂进 preset 是利用 DSH 唯一的惰性挂载点：preset 只在**新会话真的选中它**时才
-          # compose（`dsh-agent-presets` 的「reading never mounts」）。于是 `dsh web` 启动
-          # 与普通会话零 MCP 进程，只有新开一个「逆向模式」会话才拉起它们。
-          #
-          # 代价（明确的取舍）：普通会话不再有 `mcp__camoufox__*` / `mcp__jadx__*` /
-          # `mcp__ida__*` / `mcp__analyzer__*`。逆向工具本来就只服务本 preset 的域。
-          # 另一个代价：新建逆向模式会话时要等这几台服务器连上（camoufox 冷启动最慢），
-          # 这是把启动开销从「每次 `dsh web`」换成「每次开逆向会话」的必然结果。
-          #
-          # 生命周期（实现层面）：preset 子树**归它的 agent 所有**（`dsh-agent-presets/mount`
-          # 的 `PresetTree`），agent 被拆掉时整棵子树一起 dispose —— 也就是说这些 MCP 服务器
-          # 随会话结束而退出，不会变成新的常驻空闲进程。代价是每个逆向会话有自己的一份
-          # 服务器进程（并发的逆向会话 = 多份），且工具随会话存亡。
-          #
-          # 这 4 行只往 `ctx.tools` 注册工具、不 `provide` 任何服务，所以和上面的
-          # `tool-fs` / `tool-pwsh` 一样**不需要** `isolate` realm —— 不要给它们套 group。
-          #
-          # `failOnStartupError` 沿用原值（camoufox / ida 用默认值，jadx / analyzer 显式 false；
-          # 该字段的 schema 默认就是 `false`）：前置缺失（JADX-GUI 没开、Analyzer GUI 没开等）
-          # 时**静默失效不报错**，也**不会**让逆向会话创建失败 —— 所以用工具前先按
-          # `reverse-skill-router` 的能力清单探活，不要把"有工具"当成"服务器可用"。
+# ---------------------------------------------------------------------------
+# reverse-mcp-activator：把逆向模式的 MCP 启动时机从「DSH 启动」挪回「会话创建」
+# ---------------------------------------------------------------------------
+# 背景：DSH 0.2.0 起 preset registry 在启动期**急切挂载**所有已声明 preset
+# （AgentPresetRegistry.activate() → mountPreset()），于是写在 preset 里的
+# dsh-mcp-client 行会随 `dsh web` 一起拉起全部 MCP 服务器 —— rc.6 时代
+# "读文件不挂载、新会话选中才 compose"的惰性语义已不存在。实测后果：5 个服务器
+# 常驻（9~13 个进程、约 300 MB），且 IDA 的 uvx 在无代理时反复重试 PyPI
+# （6×~17s），启动日志被刷屏。
+#
+# 因此 MCP 行不再出现在任何 composition 里（那必然被急切挂载），改为由本插件
+# 在**会话创建时**按需挂到该会话自己的作用域上：启动只加载插件本身，不碰 MCP。
+#
+# 插件源码：$DSH_HOME\plugins\reverse-mcp-activator\（随账本备份）
+# 机制：监听 agent/created（serial 且被 await，排队输入会等到监听器结束），
+#      用 agentPresets.composedPreset(agent.ctx) 认出目标 preset，再对 agent.ctx
+#      调 ctx.plugin(McpClient, server) —— 工具落在该会话的 scope 层（实测全局视图
+#      里 0 个 mcp__*），会话销毁时 MCP 进程随之退出。
+#
+# ⚠️ 换机器：下面 name 里的 file:/// 与各服务器 command/args 的绝对路径都要改。
+# ⚠️ startupTimeoutMs：会话创建最多等这么久（等齐快的那几台；慢的留在后台继续）。
+- insert:
+    - id: reverse-mcp-activator
+      name: 'file:///C:/Users/y/.dsh/plugins/reverse-mcp-activator/index.mjs'
+      config:
+        presetId: reverse
+        profileName: web
+        startupTimeoutMs: 5000
+        servers:
+          # mcp-camoufox-reverse（原 preset composition 里的行，2026-10-09 迁到此处）
+          - serverName: camoufox
+            transport: stdio
+            command: 'D:\AI_python\camoufox\.venv\Scripts\python.exe'
+            args:
+              - '-m'
+              - 'camoufox_reverse_mcp'
+              - '--locale'
+              - 'zh-CN'
+            env:
+              PYTHONUTF8: '1'
+              PYTHONIOENCODING: 'utf-8'
+            toolCallTimeoutMs: 120000
 
-          - id: mcp-camoufox-reverse
-            name: '@deepseek-ai/dsh-mcp-client'
-            config:
-              serverName: camoufox
-              transport: stdio
-              command: 'D:\AI_python\camoufox\.venv\Scripts\python.exe'
-              args:
-                - '-m'
-                - 'camoufox_reverse_mcp'
-                - '--locale'
-                - 'zh-CN'
-              env:
-                PYTHONUTF8: '1'
-                PYTHONIOENCODING: 'utf-8'
-              toolCallTimeoutMs: 120000
+          # mcp-jadx（原 preset composition 里的行，2026-10-09 迁到此处）
+          - serverName: jadx
+            transport: stdio
+            command: 'C:\Users\y\.local\bin\uv.exe'
+            args:
+              - '--directory'
+              - 'D:\AI_python\MCP\MCP合集\jadx-mcp-server'
+              - 'run'
+              - 'jadx_mcp_server.py'
+            env:
+              PYTHONUTF8: '1'
+              PYTHONIOENCODING: 'utf-8'
+            toolCallTimeoutMs: 120000
+            failOnStartupError: false
 
-          - id: mcp-jadx
-            name: '@deepseek-ai/dsh-mcp-client'
-            config:
-              serverName: jadx
-              transport: stdio
-              command: 'C:\Users\y\.local\bin\uv.exe'
-              args:
-                - '--directory'
-                - 'D:\AI_python\MCP\MCP合集\jadx-mcp-server'
-                - 'run'
-                - 'jadx_mcp_server.py'
-              env:
-                PYTHONUTF8: '1'
-                PYTHONIOENCODING: 'utf-8'
-              toolCallTimeoutMs: 120000
-              failOnStartupError: false
+          # mcp-ida（原 preset composition 里的行，2026-10-09 迁到此处）
+          - serverName: ida
+            transport: stdio
+            command: 'C:\Users\y\.local\bin\uvx.exe'
+            args:
+              - '--exclude-newer=1s'
+              - 'ida-mcp'
+              - 'stdio'
+              - '--agent=dsh'
+            env:
+              PYTHONUTF8: '1'
+              PYTHONIOENCODING: 'utf-8'
+            toolCallTimeoutMs: 600000
 
-          - id: mcp-ida
-            name: '@deepseek-ai/dsh-mcp-client'
-            config:
-              serverName: ida
-              transport: stdio
-              command: 'C:\Users\y\.local\bin\uvx.exe'
-              args:
-                - '--exclude-newer=1s'
-                - 'ida-mcp'
-                - 'stdio'
-                - '--agent=dsh'
-              env:
-                PYTHONUTF8: '1'
-                PYTHONIOENCODING: 'utf-8'
-              toolCallTimeoutMs: 600000
+          # mcp-anything-analyzer（原 preset composition 里的行，2026-10-09 迁到此处）
+          - serverName: analyzer
+            transport: streamable-http
+            url: 'http://127.0.0.1:23816/mcp'
+            headers: !!js "process.env.ANALYZER_MCP_TOKEN ? { Authorization: 'Bearer ' + process.env.ANALYZER_MCP_TOKEN } : {}"
+            toolCallTimeoutMs: 180000
+            failOnStartupError: false
 
-          # 凭据不进 composition、更不进备份：`$DSH_HOME\.env` 是 DSH 专属加载的 Harness-home
-          # 层（`loadLayeredEnv` 把它物化进 `process.env`），且明确不随任何仓库传播 —— 这正是
-          # 能写在这里的前提。`!!js` 求值发生在 Loader 的 config 插值里，可用 `process` 全局
-          # （无 `require`），所以只能读环境变量，不能直接读 %APPDATA% 的配置文件。
-          # 未设 `ANALYZER_MCP_TOKEN` 时不发 Authorization 头：本机 `authEnabled: false`，
-          # 照样可用；一旦启用鉴权，把 token 写进 `.env` 并重启 DSH（.env 只在启动时读取）。
-          - id: mcp-anything-analyzer
-            name: '@deepseek-ai/dsh-mcp-client'
-            config:
-              serverName: analyzer
-              transport: streamable-http
-              url: 'http://127.0.0.1:23816/mcp'
-              headers: !!js "process.env.ANALYZER_MCP_TOKEN ? { Authorization: 'Bearer ' + process.env.ANALYZER_MCP_TOKEN } : {}"
-              toolCallTimeoutMs: 180000
-              failOnStartupError: false
-
-          # ── 流量分析 MCP（wireshark-mcp-lite，按需启动，2026-10-08）──────────────────
-          # 自研轻量单文件 MCP（server.py，10 工具 stdio）：triage 三件套（open/统计/会话）
-          # + 字段抽取 + 6 个协议预设 + 实时抓包。融合：jayimu 骨架与 tokens 策略、
-          # bx 的 allowed_dirs 隔离思想、sarthak 的 IP 脱敏参数；砍掉 SSE 常驻与 status 页。
-          # 项目：D:\AI_python\无实际文件区\wireshark-mcp-lite（uv 管理，HANDOVER 见该目录）。
-          # 前置：本机 Wireshark 的 tshark（D:\Program Files\Wireshark\tshark.exe，4.6.4 实测）。
-          # failOnStartupError: false —— .venv 缺失等情况下静默失效，不拖累逆向会话创建；
-          # 用 mcp__wireshark__* 前先调 list_protocols 探活（tshark 缺失会返回 tshark_missing）。
-          # 路径含中文：Node spawn 走 Unicode，无碍；若将来迁移机器，整目录搬走并同步改这里两行。
-          - id: mcp-wireshark-lite
-            name: '@deepseek-ai/dsh-mcp-client'
-            config:
-              serverName: wireshark
-              transport: stdio
-              command: 'D:\AI_python\无实际文件区\wireshark-mcp-lite\.venv\Scripts\python.exe'
-              args:
-                - 'D:\AI_python\无实际文件区\wireshark-mcp-lite\server.py'
-              env:
-                PYTHONUTF8: '1'
-                PYTHONIOENCODING: 'utf-8'
-              toolCallTimeoutMs: 120000
-              failOnStartupError: false
-
+          # mcp-wireshark-lite（原 preset composition 里的行，2026-10-09 迁到此处）
+          - serverName: wireshark
+            transport: stdio
+            command: 'D:\AI_python\无实际文件区\wireshark-mcp-lite\.venv\Scripts\python.exe'
+            args:
+              - 'D:\AI_python\无实际文件区\wireshark-mcp-lite\server.py'
+            env:
+              PYTHONUTF8: '1'
+              PYTHONIOENCODING: 'utf-8'
+            toolCallTimeoutMs: 120000
+            failOnStartupError: false

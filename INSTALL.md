@@ -1114,42 +1114,55 @@ Copy-Item "D:\AI_python\skills_backup\presets\reverse\*" `
           "$env:USERPROFILE\.dsh\.agent-presets\reverse\" -Force
 ```
 
-### 第 2.5 步：写 preset 声明行（**DSH 0.2.0 起必需，否则第 5 步里看不到它**）
+### 第 2.5 步：写 profile patch（**DSH 0.2.0 起必需，否则选择器里看不到它**）
 
-把本仓库 `config\cordis.patch.yml` 末尾的 `preset-reverse` 声明块**追加**进
-`$DSH_HOME\profiles\web\cordis.patch.yml`（⚠️ 是追加不是覆盖 —— profile 里可能已有
-LLM provider 等别的内容；用 `install.ps1` 恢复时它整体复制 `config\cordis.patch.yml`，
-全新环境直接覆盖即可）。
-声明块**不再用 `cordis:include` 外挂文件，而是把 composition 全量内联**（与官方
-`standard.patch.yml` 同构，2026-10-09 起）：include 会把子条目包名的解析基址改到被包含
-文件所在目录，`.agent-presets\` 向上没有 node_modules，全部行解析失败（preset 被标 broken、
-选择器过滤掉）—— 这是 0.2.0 下唯一可行的形态。内联后**没有 file:/// 路径要改**，换机器
-原样追加即可。第 2 步复制的 `agent.cordis.yml` 只作历史参考（DSH 不读它，文件头有停用说明）。
-用 `install.ps1` 恢复时这一步自动完成。
+把本仓库 `config\cordis.patch.yml` **追加**进 `$DSH_HOME\profiles\web\cordis.patch.yml`
+（⚠️ 是追加不是覆盖 —— profile 里可能已有 LLM provider 等别的内容；用 `install.ps1`
+恢复时它整体复制该文件，全新环境直接覆盖即可）。
 
-### 第 3 步：验证挂载
+这个文件里同时有两样东西：
 
-**`preset_probe` 工具本机已不存在** —— 它是旧会话里动态定义的 cordis 包，重启即消失、从未落盘，
-所以本清单与 preset README 里旧版的 `preset_probe validate reverse` 步骤**已失效**，不要照做。
+- **`preset-reverse` 声明块**（`@deepseek-ai/dsh-agent-preset`）：**全量内联**的 composition，
+  与官方 `standard.patch.yml` 同构。刻意不用 `cordis:include` 外挂文件 —— include 会把
+  子条目包名的解析基址改到被包含文件所在目录，`.agent-presets\` 向上没有 node_modules，
+  全部行解析失败（preset 被标 broken、选择器把它过滤掉）。
+- **`reverse-mcp-activator` 行**：5 个 MCP 的挂载配置（见「MCP」一节）。
+
+第 2 步复制的 `agent.cordis.yml` 只作历史参考（0.2.0 的 DSH 不读它，文件头有停用说明）。
+
+### 第 2.6 步：放 activator 插件源码（**必需，否则逆向会话没有 MCP 工具**）
+
+```powershell
+New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.dsh\plugins\reverse-mcp-activator" | Out-Null
+Copy-Item "D:\AI_python\skills_backup\plugins\reverse-mcp-activator\*" `
+          "$env:USERPROFILE\.dsh\plugins\reverse-mcp-activator\" -Force
+```
+
+不需要 pnpm、不需要进 profile 的 `dependencies`：loader 对 `file://` 形式的行 `name`
+直接 `import()`（见 `cordis-plugin-loader` 的 `EntryTree.import`）。
+**换机器要改** `config\cordis.patch.yml` 里 activator 的 `name`（`file:///` 绝对路径）
+与各 server 的 `command` / `args` 绝对路径。
+
+### 第 3 步：验证
+
+**`preset_probe` 工具本机已不存在** —— 它是旧会话里动态定义的 cordis 包，重启即消失、
+从未落盘，所以旧版的 `preset_probe validate reverse` 步骤**已失效**，不要照做。
 现在按下面的顺序验证（从弱到强）：
 
-0. **声明块在位**：`dsh --profile web --dump-config` 的输出里能找到 `preset-reverse`（与官方
-   `preset-standard` / `preset-ptc` / `preset-minimal` / `preset-cordis` 并列），且其
-   `config.plugins` 下是内联的 persona / MCP 等条目（不再是 `cordis:include` 引用）。
-   找不到 = 第 2.5 步没写对，**不用重启**，先修 patch。
+0. **两行都在位**：`dsh --profile web --dump-config` 的输出里能找到 `preset-reverse`
+   （与官方 `preset-standard` / `preset-ptc` / `preset-minimal` / `preset-cordis` 并列，
+   其 `config.plugins` 下是内联的 persona 等条目）**和** `reverse-mcp-activator`
+   （带 `servers:` 配置）。找不到 = 第 2.5 步没写对，**不用重启**，先修 patch。
 1. **静态**：用 Loader 真实 YAML 方言解析 composition，并逐行喂给各插件的 Config schema。
    `skills\reverse-skill-router\scripts\scan-capabilities.ps1` 的 preset 段就是同一套解析；
    另要确认 composition 里引用的每个包在新版 DSH 里仍然存在（2026-10-08 就抓到过
    `dsh-workflow-worker-thread` 已被删除，换成 `workflow-ptc` 才过）。
 2. **半动态**：`pwsh -File skills\reverse-skill-router\scripts\scan-capabilities.ps1` ——
-   清单里 5 条 MCP 的「层」列应显示 `preset:reverse`；
-3. **真动态（唯一权威）**：**重启 DSH**（preset 声明只在启动期装载），再新开一个会话、
-   预设选「逆向模式」。挂载失败会让**会话创建直接失败并回滚**，并指名是哪一行 ——
-   所以这一步一出错就是响的，不会静默半组装。
-
-⚠️ 注意 roster 里 `broken: false` **不算验证**：它只做形状检查（YAML 能解析、有具名行），
-行引用的包不存在、配置非法、行没激活、服务发布到根 realm 这四种失败它都照过。
-
+   清单里的 MCP 条目应能对上。
+3. **真动态（唯一权威，三个方向都要看）**：**重启 DSH**，然后
+   a. **启动日志里不该有任何 MCP 字样**（这是 2026-10-09 换用 activator 的全部意义）；
+   b. 新开一个「逆向模式」会话 → 日志出现各 MCP 的启动特征，会话里出现 `mcp__*` 工具；
+   c. 再开一个普通会话 → 不该有 `mcp__*`。
 ### 第 3.5 步：analyzer 的凭据（可选，仅启用鉴权时需要）
 
 4 个 MCP 里只有 analyzer 用凭据。它的 token 不在 composition 里，而在 `$DSH_HOME\.env`：
@@ -1201,54 +1214,53 @@ pwsh -NoProfile -File "$env:USERPROFILE\.dsh\skills\reverse-skill-router\scripts
 本机有 **5 个 MCP server**。它们**不是 skill、也不是 npm 插件**，而是一条 DSH 配置
 （`@deepseek-ai/dsh-mcp-client` 的条目）—— 但同样必须迁移，否则新环境会少掉这些工具。
 
-### 挂在哪一层：`preset` 而不是 `profile`（2026-10-02 起；0.2.0 后语义有变）
+### 挂在哪一层：`reverse-mcp-activator` 插件（会话创建时挂载，2026-10-09 起）
 
-**5 个 MCP 全部挂在 agent preset `reverse` 的 composition 里（2026-10-09 起随声明块内联在
-profile patch 的 `preset-reverse` 段），不再以独立条目挂在 profile 层。** 两者的差别是
-**进程何时启动**，不是能不能用：
+**5 个 MCP 不再写在任何 composition 里**，而是由自研插件 `reverse-mcp-activator`
+（本仓库 `plugins\reverse-mcp-activator\`）在**新开逆向模式会话时**挂到该会话自己的
+作用域上。profile patch 里只有一行插件声明（`- id: reverse-mcp-activator`），它的
+`config.servers` 就是这 5 台服务器的完整配置。
 
-| 挂载层 | 何时启动 | 可见范围 | 代价 |
+搬了三次，每次都是为了让「进程何时启动」更贴近"要用才起"：
+
+| 时间 | 挂载层 | 启动时机 | 为什么再改 |
 |---|---|---|---|
-| profile（host 组装） | `dsh web` 一启动就 spawn 全部 | 所有会话 | 常驻进程 + 启动期同步等待 |
-| **preset（现在）** | **DSH ≤0.1：只有新会话选中才启动；DSH 0.2.0 起：registry 启动期急切挂载所有已声明 preset（实测，2026-10-09），等同于随 dsh 启动** | 只有该 preset 的会话 | 0.2.0 起回到"随启动拉起"，但连不上不拦启动（failOnStartupError: false） |
+| ~2026-09-30 | profile host 层 | `dsh web` 启动即 spawn 全部 | 最初形态 |
+| 2026-10-02 | preset composition | 当时语义：新会话选中该 preset 才 compose | 启动期 10 个进程、约 300 MB 常驻 |
+| **2026-10-09** | **`reverse-mcp-activator` 的 `config.servers`** | **新开逆向模式会话时** | 0.2.0 起 registry **启动期急切挂载所有已声明 preset**，「preset = 惰性挂载点」的语义消失：MCP 行只要写在 composition 里就必然随启动拉起（实测 IDA 的 uvx 反复重试 PyPI，6×~17s，日志刷屏） |
 
-为什么必须改：原先挂 profile 层时，`dsh web` 启动后 9~13 秒内 spawn 出 **10 个进程、约 300 MB**
-（camoufox 2 个 python、jadx uv+2 python、ida uvx+uv+ida-mcp+2 python），且
-`dsh-mcp-client` 的 `apply()` 会**同步等待「连接 + `tools/list`」完成**才让条目激活 ——
-它的 Config schema 里**没有任何懒加载字段**，启动与发现超时又直接继承 MCP SDK 的 60 s。
-所以要按需启动，只能换挂载层：preset 曾是 DSH 里唯一的惰性挂载点
-（`dsh-agent-presets` 的 "reading never mounts" —— 读文件不会挂载，只有新会话选中才 compose）。
+**为什么必须换到插件**：`dsh-mcp-client` 的 `apply()` 会**同步等待「连接 + `tools/list`」
+完成**才让条目激活，它的 Config schema 里**没有任何懒加载字段**，启动与发现超时又直接
+继承 MCP SDK 的 60 s —— 也就是说"挂载"就等于"spawn 进程并等它连上"，无法靠配置改成惰性。
+要按需，只能把挂载动作本身挪出 composition，交给运行时插件。
 
-> ⚠️ **DSH 0.2.0-rc.2 起这个惰性语义已不存在（2026-10-09 实测）**：新版 registry 在启动期
-> 急切挂载所有已声明 preset（roster 上先挂好、会话选择时复用），5 个 MCP 随 `dsh web` 启动拉起，
-> 进程形态回到 2026-10-02 之前的常驻模式（差别：连不上不拦启动）。preset 层现在仍有意义
-> —— 工具只暴露给逆向会话、不污染普通会话 —— 但"省进程"的收益在 0.2.0 下没有了。
-> 若未来想追回，属上游（dsh-agent-preset-registry）的 lazy-mount 特性请求。
+**插件怎么做到按需**（源码与配方：`plugins\reverse-mcp-activator\RECIPE.md`）：
 
-新环境的装法因此变成：**装完 `reverse` preset 声明块就同时装好了 MCP 挂载**（见上文 preset 一节）。
-`config\cordis.patch.yml` 里的 5 段 MCP 不再以独立 `insert` 条目出现 —— 它们内联在
-`preset-reverse` 声明块的 `config.plugins` 里。
+- 启动只加载插件自身，**不碰任何 MCP**；
+- 监听 `agent/created`（serial 且被 await，排队输入会等到监听器结束）→ 用
+  `agentPresets.composedPreset(agent.ctx)` 认出目标 preset → 对 `agent.ctx` 调
+  `ctx.plugin(McpClient, server)`；
+- `ToolRuntime.register()` 按**调用方 ctx 的 scope** 落层，所以工具只进该会话的 scope：
+  普通会话看不到 `mcp__*`（实测全局视图 0 个），会话销毁时服务器进程随之退出；
+- 并发挂载 + `startupTimeoutMs`（默认 5s）超时放行：快的先就绪，慢的（camoufox 冷启动、
+  IDA 的 uvx 解析）转后台继续。
 
-⚠️ **改回常驻**：把声明块 `config.plugins` 末尾那 5 段（`mcp-camoufox-reverse` /
-`mcp-jadx` / `mcp-ida` / `mcp-anything-analyzer` / `mcp-wireshark-lite`）整段搬出来、
-包进 profile patch 顶层的 `- insert:` 列表即可（历史副本在 `presets\reverse\agent.cordis.yml`
-末尾）。**只有 analyzer 的
-`headers.Authorization` 从明文 token 改成了 `!!js process.env.ANALYZER_MCP_TOKEN` 引用**（见下）。
+⚠️ **不要再把 MCP 行写回任何 composition**（preset 或 profile host 层）—— 那会重新引入
+"随 `dsh web` 启动拉起"的问题。要改挂载，改 `config\cordis.patch.yml` 里 activator 的
+`config.servers`。
 
-⚠️ **有效期**：MCP 挂在 preset 层后，**普通会话（`standard` 等）里根本没有 `mcp__*` 工具**。
-要用 jadx / IDA / camoufox / analyzer / wireshark，必须先**新开一个「逆向模式」会话**。
+⚠️ **有效期**：MCP 只对**逆向模式会话**可见。要用 jadx / IDA / camoufox / analyzer /
+wireshark，必须先**新开一个「逆向模式」会话**。
 
-**生命周期（新环境的预期）**：preset 子树归它的 agent 所有（`dsh-agent-preset-registry/mount` 的
-`PresetTree`），agent 拆掉时整棵子树一起 dispose —— 所以这些 MCP 服务器**随会话结束而退出**，
-不会变成新的常驻空闲进程。代价是**每个逆向会话都有自己的一份服务器进程**（并发的逆向会话 =
-多份，内存成倍）。但注意：DSH 0.2.0 起 registry 在**启动期**就为每个已声明 preset 挂好一版
-（eager mount，2026-10-09 实测），所以"启动时就有一份服务器进程"是当前现实，随会话退出回收
-的那份是每会话独立挂载之外的另一份语义 —— 以实测进程数为准。
+**生命周期**：MCP 插件挂在 agent 自己的作用域下，agent 被拆掉时一起 dispose ——
+服务器**随会话结束而退出**。代价是**每个逆向会话有自己的一份服务器进程**（并发的逆向
+会话 = 多份，内存成倍），且开这个会话时快的那几台要等几秒。
 
-**挂载失败不会拦住会话**：这 5 行的 `failOnStartupError` 都是 `false`
-（该字段 schema 默认值就是 `false`；jadx / analyzer / wireshark-lite 显式写、camoufox / ida 用默认值）。
-所以服务器连不上时只是**静默少掉工具**，逆向会话仍能创建 —— 用工具前务必按能力清单探活。
-能让会话创建失败的只有硬错误（composition 语法/结构错误、行引用的包不存在）。
+**挂载失败不会拦住会话**：每个 server 的 `failOnStartupError` 都是 `false`
+（该字段 schema 默认值就是 `false`；jadx / analyzer / wireshark-lite 显式写、
+camoufox / ida 用默认值）。所以服务器连不上时只是**静默少掉工具**，逆向会话仍能创建 ——
+用工具前务必按能力清单探活。能让会话创建失败的只有硬错误（activator 插件载入失败、
+某个 server 的 config 不符合 `dsh-mcp-client` 的 schema）。
 
 | MCP | `serverName` | 工具前缀 | 依赖的运行时 |
 |---|---|---|---|
@@ -1258,12 +1270,10 @@ profile patch 的 `preset-reverse` 段），不再以独立条目挂在 profile 
 | analyzer | `analyzer` | `mcp__analyzer__*` | **Anything Analyzer Electron GUI**（`D:\ProgramsDev\AnythingAnalyzer`，约 300 MB，见下）—— 注意它是**唯一的 `transport: streamable-http` 挂载**，不是 stdio |
 | wireshark | `wireshark` | `mcp__wireshark__*` | 自研 `wireshark-mcp-lite` 单文件（`D:\AI_python\无实际文件区\wireshark-mcp-lite\`，uv，见下）+ 本机 Wireshark 的 tshark |
 
-⚠️ **验证方式随之变化**：`dsh --profile web --dump-config` **再也看不到**这 5 个条目了 ——
-`--dump-config` 只打印 host 组装的树，不含 preset composition。改用：
-`pwsh -File skills\reverse-skill-router\scripts\scan-capabilities.ps1`（它同时扫 profile 层与
-preset 层，清单里「层」这一列会标出 `preset:reverse`），或直接在新开的逆向模式会话里看
-工具列表是否出现 `mcp__*`。
-
+⚠️ **验证方式**：`dsh --profile web --dump-config` 能看到 `reverse-mcp-activator` 行及其
+`servers:` 配置（2026-10-09 起 MCP 挂在插件里，不再内联在 preset 声明块中，也不再是
+profile 顶层条目）。真正的验证是三个方向：**启动日志零 MCP + 逆向会话出现 `mcp__*` +
+普通会话不出现**。
 ### camoufox MCP
 
 - **上游**：https://github.com/WhiteNightShadow/camoufox-reverse-mcp （1.8.0，39 个工具）
