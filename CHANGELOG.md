@@ -14,6 +14,23 @@
 
 ---
 
+## 2026-10-13 —— fix: `Remove-ToRecycleBin.ps1` 回收空目录时崩溃
+
+- **变更类型**：fix（skill 内脚本缺陷）
+- **症状**：把**空目录**交给回收站脚本时报
+  `在此对象上找不到属性"Sum"。请验证该属性是否存在。`，删除中止（未误删任何东西）。
+- **原因**：脚本在 `Set-StrictMode -Version Latest` 下直接取
+  `(Get-ChildItem ... | Measure-Object -Property Length -Sum).Sum`。
+  `Measure-Object` 在**零输入**时不产生 `Sum` 属性，取属性即抛错；
+  只有非空目录才会走到正常分支。
+- **修复**：先取回测量对象数组，再判断 `Sum` 属性是否存在，缺失按 0 计。
+- **影响文件**：`skills\dev-hygiene\scripts\Remove-ToRecycleBin.ps1`
+  （已同步回 live `$DSH_HOME\skills\dev-hygiene\`，两侧 SHA256 一致）。
+- **验证**：空目录 + 普通文件两种输入各回收一次，均成功；非空目录行为不变。
+- **发现场景**：清理携程逆向项目的 `.tmp` / `.tmp_pip`（Python `tempfile` 残留）时触发。
+
+---
+
 ## 2026-10-10 —— fix: 恢复被「账本回灌」抹掉的第三方 API provider 配置
 
 - **变更类型**：fix（数据恢复 + 账本缺陷修复）

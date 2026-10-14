@@ -1,4 +1,4 @@
-﻿#Requires -Version 7.0
+#Requires -Version 7.0
 <#
 .SYNOPSIS
     删除文件 / 目录 —— 默认送进 Windows 回收站，绝不静默硬删。
@@ -71,8 +71,13 @@ $deleted = 0
 foreach ($item in $targets) {
     $size = 0
     if ($item.PSIsContainer) {
-        $sum = (Get-ChildItem -LiteralPath $item.FullName -Recurse -Force -File -ErrorAction SilentlyContinue |
-                Measure-Object -Property Length -Sum).Sum
+        # 空目录时 Measure-Object 不产生 Sum 属性，StrictMode 下直接取 .Sum 会抛错，
+        # 因此先取回对象再判断属性是否存在（0 项 => 大小 0）。
+        $measured = @(Get-ChildItem -LiteralPath $item.FullName -Recurse -Force -File -ErrorAction SilentlyContinue |
+                      Measure-Object -Property Length -Sum)
+        $sum = if ($measured.Count -gt 0 -and $null -ne $measured[0].PSObject.Properties['Sum']) {
+            $measured[0].Sum
+        } else { 0 }
         if ($null -ne $sum) { $size = [int64]$sum }
     }
     else {
