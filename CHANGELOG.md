@@ -14,6 +14,42 @@
 
 ---
 
+## 2026-10-24 —— config: 第三方模型接入的上下文长度统一调成 1M
+
+- **变更类型**：config（用户要求）
+- **内容**：给 `llm-pi-ai` 下**每一个第三方 provider 的每一个模型条目**加 `contextWindow: 1000000`
+  （不改 `maxTokens`，输出上限仍走路由默认 32768）：
+  - `$DSH_HOME\profiles\web\cordis.patch.yml` —— claudex、a-lang、lesec（`cn:deepseek-v4.1-flash`
+    与 `deepseek-v4.1-flash` 两条）、ok88，共 **5** 条；
+  - `$DSH_HOME\profiles\desktop\cordis.patch.yml` —— claudex、a-lang、lesec（2 条），共 **4** 条。
+  - 官方的 `deepseek-account` 不动：它不是第三方接入。
+- **原因**：用户要求「把所有第三方模型接入的上下文长度调成 1M」。
+- **为什么必须写在条目上、而不是 provider 级的 `defaultContextWindow`**：
+  `deepseek-v4.1-flash` 不在 pi-ai 安装目录的 catalog 里
+  （`@earendil-works/pi-ai\dist\providers\data\deepseek.json` 只有 `deepseek-flash` 与
+  `deepseek-v4-pro`，两者都是 `contextWindow: 1000000`），所以这些条目此前命中的是
+  **路由级 fallback `defaultContextWindow = 262144`（256K）**。按 `catalog.d.ts` 的规则，
+  fallback 只对"条目和目录都没定义"的模型生效，**显式条目字段才是覆盖**。
+- **风险（已告知用户）**：`contextWindow` 是**本地声明**，DSH 不会去探测上游真实窗口。
+  声明 1M 之后压缩阈值、token 压力、溢出判定都按 1M 算，而 claudex / a-lang / lesec / ok88
+  四家站点真实上限**未验证** —— 超过服务端真实窗口的请求会被上游报错，或静默截断后返回
+  `stopReason: length` 且 output=0（pi-ai 的 overflow 检测正是靠这个信号）。
+- **验证**：
+  1. `dsh --profile web --dump-config` → **exit 0**（62,552 B），5 条 `contextWindow: 1000000` 就位；
+  2. 用 `@deepseek-ai/dsh-llm-pi-ai` 导出的 `Config`（schemastery）跑两个 profile 的用户层 →
+     **9 条第三方模型条目全部 `contextWindow=1000000` 且通过 schema**（证明该字段被 schema 接受、
+     没有被静默剥离）；`!!js` 标签用 js-yaml 自定义 `tag:yaml.org,2002:js` 类型解析；
+  3. `desktop` profile 由 Electron 独占，`--dump-config` 直接拒绝（`error: profile "desktop" is
+     managed exclusively by the Electron application`），只能做文件级 schema 校验。
+- **生效方式**：模型目录在 host 启动期装载 —— **重启 DSH** 后模型选择器与上下文计量才按 1M 走。
+- **回退**：`profiles\web\cordis.patch.yml.bak-20261024-ctx1m`、
+  `profiles\desktop\cordis.patch.yml.bak-20261024-ctx1m`；或 `git revert` 本提交。
+- **影响文件**：`config\cordis.patch.yml`（同步为实况 —— 顺带吸收了此前未同步的差异：
+  `agent-default-model` 已是 `deepseek-account/deepseek-flash`、模型清单已收缩、activator 段注释措辞）、
+  新增 `config\desktop\cordis.patch.yml`、`INSTALL.md` 的 `config\` 小节。
+
+---
+
 ## 2026-10-13 —— fix: `Remove-ToRecycleBin.ps1` 回收空目录时崩溃
 
 - **变更类型**：fix（skill 内脚本缺陷）

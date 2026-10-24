@@ -41,15 +41,13 @@
         models:
           - id: deepseek-v4.1-flash
             name: deepseek-v4.1-flash
+            # 上下文 1M（2026-10-24 按要求统一调成 1M，下同）。
+            # ★ 这是**本地声明**，不是探测结果：`deepseek-v4.1-flash` 不在 pi-ai 安装目录
+            #   的 catalog 里（catalog 只有 deepseek-flash / deepseek-v4-pro），所以此前走的是
+            #   路由级 defaultContextWindow = 262,144（256K）。中转站真实上限未验证，
+            #   超过真实窗口的请求由服务端报错或静默截断，见本文件末尾说明。
+            contextWindow: 1000000
             reasoningEfforts: false
-          - id: deepseek-v4-pro
-            name: deepseek-v4-pro
-            reasoningEfforts:
-              off: null
-              high: high
-              max: max
-          - id: kimi-k3
-            name: kimi-k3
       a-lang:
         displayName: alang
         apiKeyEnv: A_LANG_API_KEY
@@ -58,16 +56,11 @@
         models:
           - id: deepseek-v4.1-flash
             name: deepseek-v4.1-flash
+            contextWindow: 1000000
             reasoningEfforts:
               off: none
               low: low
               medium: medium
-              high: high
-              max: max
-          - id: glm-5.3-flash
-            name: glm-5.3-flash
-            reasoningEfforts:
-              off: none
               high: high
               max: max
       lesec:
@@ -78,6 +71,7 @@
         models:
           - id: cn:deepseek-v4.1-flash
             name: cn:deepseek-v4.1-flash
+            contextWindow: 1000000
             reasoningEfforts:
               off: none
               low: low
@@ -86,6 +80,7 @@
               max: max
           - id: deepseek-v4.1-flash
             name: deepseek-v4.1-flash
+            contextWindow: 1000000
             reasoningEfforts:
               off: none
               low: low
@@ -100,6 +95,7 @@
         models:
           - id: deepseek-v4.1-flash
             name: deepseek-v4.1-flash
+            contextWindow: 1000000
             reasoningEfforts:
               off: none
               low: low
@@ -109,8 +105,9 @@
 - id: agent-default-model
   name: "@deepseek-ai/dsh-agent-default-model"
   config:
-    provider: claudex
-    model: kimi-k3
+    provider: deepseek-account
+    model: deepseek-flash
+    reasoningEffort: high
 - id: ui-settings-general
   name: "@deepseek-ai/dsh-client-ui-settings-general"
   config:
@@ -167,7 +164,8 @@
       config:
         id: reverse
         name: 逆向模式
-        description: 授权目标逆向工程工作流：小程序 / Web / Android 三域现成，iOS 与 Win 预留并按深度降级；开工静默登记授权、能力清单驱动工具选择、产物落纯 ASCII 案件库并按统一验收清单交付。
+        description: 授权目标逆向工程工作流：小程序 / Web / Android 三域现成，iOS 与 Win
+          预留并按深度降级；开工静默登记授权、能力清单驱动工具选择、产物落纯 ASCII 案件库并按统一验收清单交付。
         order: 5
         plugins:
           # The `reverse` agent preset — 逆向模式. Authored from the shipped `standard`
@@ -331,17 +329,17 @@
                 name: '@deepseek-ai/dsh-plan-mode'
                 config:
                   section: |
-                        You are in plan mode. Stay in plan mode until exit_plan_mode succeeds or the user switches the session mode. Imperative language to implement changes means plan the implementation, not execute it. A user's conversational agreement — including an answer confirming something you asked — approves nothing and does not end plan mode; fold the confirmed decision into the plan and submit it through exit_plan_mode.
+                    You are in plan mode. Stay in plan mode until exit_plan_mode succeeds or the user switches the session mode. Imperative language to implement changes means plan the implementation, not execute it. A user's conversational agreement — including an answer confirming something you asked — approves nothing and does not end plan mode; fold the confirmed decision into the plan and submit it through exit_plan_mode.
 
-                        Explore first. Use non-mutating reads, searches, static analysis, and checks to ground the plan in the actual repository. Do not edit or write files, change configuration, run formatters or code generation that rewrites tracked files, commit, or otherwise carry out the plan. Prefer existing functions and patterns over new machinery.
+                    Explore first. Use non-mutating reads, searches, static analysis, and checks to ground the plan in the actual repository. Do not edit or write files, change configuration, run formatters or code generation that rewrites tracked files, commit, or otherwise carry out the plan. Prefer existing functions and patterns over new machinery.
 
-                        The tool catalog stays the same across modes for request-cache stability. These plan-mode rules override any later tool description or guidance that suggests using mutation tools; those tools remain listed to keep the tool catalog unchanged. Do not use todo_write to track this planning phase: it tracks implementation after an approved plan, while the plan itself belongs in exit_plan_mode.
+                    The tool catalog stays the same across modes for request-cache stability. These plan-mode rules override any later tool description or guidance that suggests using mutation tools; those tools remain listed to keep the tool catalog unchanged. Do not use todo_write to track this planning phase: it tracks implementation after an approved plan, while the plan itself belongs in exit_plan_mode.
 
-                        Resolve discoverable facts by inspection. Use ask_user_question only for user-owned choices or material ambiguity that inspection cannot answer. Do not ask the user where code lives or how current behavior works when you can find out.
+                    Resolve discoverable facts by inspection. Use ask_user_question only for user-owned choices or material ambiguity that inspection cannot answer. Do not ask the user where code lives or how current behavior works when you can find out.
 
-                        Make the plan decision-complete: state the goal and success criteria; group implementation changes by subsystem; identify public API, schema, and data-flow changes; cover edge cases, failure modes, tests, acceptance criteria, and explicit assumptions. Keep it concise enough to review but detailed enough that another engineer can implement it without making design decisions.
+                    Make the plan decision-complete: state the goal and success criteria; group implementation changes by subsystem; identify public API, schema, and data-flow changes; cover edge cases, failure modes, tests, acceptance criteria, and explicit assumptions. Keep it concise enough to review but detailed enough that another engineer can implement it without making design decisions.
 
-                        When ready, call exit_plan_mode with the complete plan markdown, starting with a # title. Make exit_plan_mode the only and final tool call in that assistant response: it presents the plan for approval, and implementation begins only in a later step after approval. Do not paste the final plan as a plain reply or ask "should I proceed?" through prose or ask_user_question. If review rejects it, incorporate the feedback and present again. If the review channel is unavailable or aborted, stay in plan mode and ask the user to switch modes manually; do not proceed with implementation.
+                    When ready, call exit_plan_mode with the complete plan markdown, starting with a # title. Make exit_plan_mode the only and final tool call in that assistant response: it presents the plan for approval, and implementation begins only in a later step after approval. Do not paste the final plan as a plain reply or ask "should I proceed?" through prose or ask_user_question. If review rejects it, incorporate the feedback and present again. If the review channel is unavailable or aborted, stay in plan mode and ask the user to switch modes manually; do not proceed with implementation.
 
           # ── compaction ──────────────────────────────────────────────────────────────
 
@@ -481,27 +479,6 @@
             name: '@deepseek-ai/dsh-plugin-manager/tools'
             disabled: true
 
-# ---------------------------------------------------------------------------
-# reverse-mcp-activator：把逆向模式的 MCP 启动时机从「DSH 启动」挪回「会话创建」
-# ---------------------------------------------------------------------------
-# 背景：DSH 0.2.0 起 preset registry 在启动期**急切挂载**所有已声明 preset
-# （AgentPresetRegistry.activate() → mountPreset()），于是写在 preset 里的
-# dsh-mcp-client 行会随 `dsh web` 一起拉起全部 MCP 服务器 —— rc.6 时代
-# "读文件不挂载、新会话选中才 compose"的惰性语义已不存在。实测后果：5 个服务器
-# 常驻（9~13 个进程、约 300 MB），且 IDA 的 uvx 在无代理时反复重试 PyPI
-# （6×~17s），启动日志被刷屏。
-#
-# 因此 MCP 行不再出现在任何 composition 里（那必然被急切挂载），改为由本插件
-# 在**会话创建时**按需挂到该会话自己的作用域上：启动只加载插件本身，不碰 MCP。
-#
-# 插件源码：$DSH_HOME\plugins\reverse-mcp-activator\（随账本备份）
-# 机制：监听 agent/created（serial 且被 await，排队输入会等到监听器结束），
-#      用 agentPresets.composedPreset(agent.ctx) 认出目标 preset，再对 agent.ctx
-#      调 ctx.plugin(McpClient, server) —— 工具落在该会话的 scope 层（实测全局视图
-#      里 0 个 mcp__*），会话销毁时 MCP 进程随之退出。
-#
-# ⚠️ 换机器：下面 name 里的 file:/// 与各服务器 command/args 的绝对路径都要改。
-# ⚠️ startupTimeoutMs：会话创建最多等这么久（等齐快的那几台；慢的留在后台继续）。
 - insert:
     - id: reverse-mcp-activator
       name: 'file:///C:/Users/y/.dsh/plugins/reverse-mcp-activator/index.mjs'
@@ -557,7 +534,8 @@
           - serverName: analyzer
             transport: streamable-http
             url: 'http://127.0.0.1:23816/mcp'
-            headers: !!js "process.env.ANALYZER_MCP_TOKEN ? { Authorization: 'Bearer ' + process.env.ANALYZER_MCP_TOKEN } : {}"
+            headers: !!js "process.env.ANALYZER_MCP_TOKEN ? { Authorization: 'Bearer ' +
+              process.env.ANALYZER_MCP_TOKEN } : {}"
             toolCallTimeoutMs: 180000
             failOnStartupError: false
 

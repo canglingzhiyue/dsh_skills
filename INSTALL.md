@@ -19,7 +19,10 @@
 - `plugins\<name>\RECIPE.md` —— 插件配方（不复制 `node_modules`）
 - `config\` —— 常驻规则 `AGENTS.md`、DSH 设置 `settings.yaml`、profile 配置、
   `cordis.patch.yml`（2026-10-08 起含 `preset-reverse` 声明块；2026-10-09 起声明块内
-  **全量内联** reverse 的 composition（含 5 段 MCP 挂载），不再依赖 `.agent-presets\` 目录）
+  **全量内联** reverse 的 composition（含 5 段 MCP 挂载），不再依赖 `.agent-presets\` 目录；
+  2026-10-24 起所有第三方 provider 的模型条目显式声明 `contextWindow: 1000000`）、
+  `desktop\cordis.patch.yml`（Electron 桌面版 profile `desktop` 的用户层 —— 该 profile
+  由 Electron 独占管理、`dsh --dump-config` 会拒绝读取，故单独存一份，改法与 web 层相同）
 - `presets\<id>\` —— 用户自建 agent preset 的整份副本（`agent.cordis.yml` + `preset.yml` + `README.md`）。
   **注意（2026-10-09 起）**：`presets\reverse\agent.cordis.yml` 已转为**历史参考**（文件头有停用说明），
   生效的 composition 在 `config\cordis.patch.yml` 的 `preset-reverse` 声明块里，改它才是改 preset。
