@@ -1701,3 +1701,99 @@ pwsh -File "$env:USERPROFILE\.dsh\skills\reverse-skill-router\scripts\scan-capab
   照它留下的新的 `.imported` 再对一次即可。
 
 **注意**：这属于 DSH 自身的行为变化（非用户要求、非本仓库改动引起），这里只做事实记录与迁移补位。
+
+## dsh-skillhub（P2 独立类 · DSH 插件 · 网络来源）
+
+**它是什么**：技能与 MCP 的统一开关面板。设置页多一页 `skill&mcp`（全局层），对话输入框上方多一个
+「技能」胶囊（本项目 / 本对话层）。**纯可见性控制** —— 它注册 skill provider 与 MCP 工具 `restrict`，
+**不增删改磁盘上的任何技能目录**。开关数据在 `$DSH_HOME/skillhub/`（用户数据，**不入本仓库**）。
+
+配方全文见 `plugins\dsh-skillhub\RECIPE.md`；这里只写恢复动作。
+
+### 1) 版本必须先对（装错版本等于没装）
+
+| DSH 版本 | 可装的插件版本 |
+|---|---|
+| 0.2.0-rc.x | `1.0.4` 及以上（本机 `0.2.0-rc.2` + `1.0.7`） |
+| 0.1.7-rc.x | `1.0.2` |
+| 0.1.5 | `1.0.1` |
+
+装错版本的典型症状：DSH 启动期**整行拒绝**该插件，界面上"什么都没有"、刷新和重启都不恢复。
+
+### 2) 安装（前置 pnpm；npm 包不需要 `allowBuilds`）
+
+```powershell
+dsh plugin --profile web add @aa2246740/dsh-skillhub
+```
+
+### 3) ⚠ 本机适配：`@deepseek-ai/schemastery` 必须 ≥ 3.18.4（否则插件 import 期就崩）
+
+`@howmp/dsh-pentest` 的依赖会把 `@deepseek-ai/schemastery@3.18.1` 拉到 profile 顶层（`nodeLinker: hoisted`），
+而本插件用到 **3.18.4 才有的 `Schema.volatile()`** → 启动日志出现
+
+```
+dsh: warning: 1 entry did not activate
+dsh-skillhub (@aa2246740/dsh-skillhub): failed to import
+```
+
+而 `--dump-config` **照样通过**（兼容检查只看 peer 版本区间，不看实际装到哪份），所以**装完必须实跑一次**。
+
+修法：`~/.dsh/profiles/web/package.json` 的 `dependencies` 加一行（与 host 同版本），再 install：
+
+```json
+"@deepseek-ai/schemastery": "3.18.5"
+```
+
+```powershell
+dsh plugin --profile web install
+cd "$env:USERPROFILE\.dsh\profiles\web"
+node --input-type=module -e "const m = await import('@aa2246740/dsh-skillhub'); console.log('OK', Object.keys(m).join(','))"
+# 期望：OK Config,apply,attachAgentProvider,inject,name
+```
+
+> 该行已随 `config\profile\package.json` 备份 —— **新环境恢复 profile 配置时会自动带上**，
+> 但如果你是从空 profile 手动装插件，就得自己补这一行。
+
+### 4) 装完应该长成什么样
+
+`dsh.profile.bundles` 末尾出现 `"@aa2246740/dsh-skillhub"`（由 dsh 自动 reconcile，少了它插件不加载）；
+`dependencies` 里有 `"@aa2246740/dsh-skillhub": "1.0.7"` 与上面那行 schemastery。
+
+### 5) 验证
+
+```powershell
+# 组合层
+dsh --profile web --dump-config | Select-String 'dsh-skillhub' -Context 1,2
+
+# 真实加载：另起临时实例（不动正在跑的那个）
+$env:DSH_WEB_URL=''
+dsh web --no-open --port 3099
+# 期望两行且无 activate 警告：
+#   [my-plugins/dsh-skillhub] loaded
+#   [my-plugins/dsh-skillhub] http /skillhub
+```
+
+HTTP 探活（先 `GET /?token=<token>` 换 303 + cookie，再用 cookie）：
+
+- `GET /skillhub/catalog` → 200，`tree` 两个 root（`~/.agents/skills`、`$DSH_HOME/skills`）；
+- `GET /skillhub/mcp/catalog` → 200，**本机 `servers: []` 属正常**（6 个 MCP 由 `reverse-mcp-activator`
+  在逆向模式会话创建时才挂载，普通会话发现不到）。
+
+> 组合请求 URL `plugins/??<mod>/client.js&rev=…` 用 `Invoke-WebRequest` 或 `curl` 拼容易 404，
+> 探活请用 node 的 `fetch`。
+
+### 6) 必须重启 DSH
+
+bundle 层只在 profile 启动时组合，**运行中的进程不会热加载插件**。重启后才有设置页 `skill&mcp`
+与输入框上方的「技能」胶囊。卸载同理：
+
+```powershell
+dsh plugin --profile web remove @aa2246740/dsh-skillhub
+```
+
+### 7) 本机常态（别当成故障）
+
+- **10 个 broken 技能**是上游 skill 自身 frontmatter 不合规（`Code` / `Memory` / `FFmpeg Video Editor` 等
+  名字带空格大写，或 `debug-pro-1.0.0` / `test-runner-1.0.0` 缺 frontmatter），**早已存在**，与插件无关。
+- **MCP 页签为空**：本机 MCP 不是常驻挂载，见上。
+- `~/.agents/skills` 下的软链接包（`ego-browser` 等）会被识别为 `symlink`，可正常开关。
