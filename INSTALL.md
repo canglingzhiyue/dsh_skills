@@ -192,15 +192,17 @@ Format and migration instructions: load the `skills-inventory` skill.
 
 ## dev-hygiene（P1 依赖类 · 本地来源）
 
-**它是什么**：本机五条开发硬规则的唯一权威 —— ① 删除一律走 Windows 回收站；② 所有 shell 一律 pwsh 7；
+**它是什么**：本机**六条**开发硬规则的唯一权威 —— ① 删除一律走 Windows 回收站；② 所有 shell 一律 pwsh 7；
 ③ Python 一律 uv（项目内 `.venv` + `uv.lock` + 清华源 + 只用 uv 托管解释器）；④ 每阶段收尾清理无用文件；
-⑤ 每项目产出 `HANDOVER.md`（更新前先备份）。规则细节在 skill 正文，`AGENTS.md` 里只留 5 行常驻红线。
+⑤ 每项目产出 `HANDOVER.md`（更新前先备份）；⑥ **Git 提交一律显式列路径**（禁 `git add -A` / `commit -a`，
+不重写已推送历史 —— 2026-10-27 实测：`-A` 把并发会话未提交的 302 行吞进了自己的提交）。
+规则细节在 skill 正文，`AGENTS.md` 里只留 6 行常驻红线。
 
 **skill 目录自包含**（6 文件约 34 KB）：
 
 | 路径 | 内容 |
 |---|---|
-| `SKILL.md` | 五条规则的完整语义、硬删豁免清单、收尾清单、本机已知坑 |
+| `SKILL.md` | 六条规则的完整语义、硬删豁免清单、收尾清单、本机已知坑 |
 | `scripts\Remove-ToRecycleBin.ps1` | **唯一删除实现**：默认回收站、`-WhatIf` 预演、失败抛异常绝不降级、`-HardDelete -Reason` 为豁免通道 |
 | `scripts\recycle.py` | Python 侧封装（转调上面的 ps1、`-Quiet` 取结果），复制到项目 `tools\` 使用 |
 | `templates\HANDOVER.md` | 交接文档模板（含 `docs\handover-history\` 备份 / 回退流程） |
@@ -209,7 +211,7 @@ Format and migration instructions: load the `skills-inventory` skill.
 
 ### 第 1 步：放入 skill 根
 
-把 `local\skill\dev-hygiene\` **整个目录**复制到 `<skill 根>\dev-hygiene\`；frontmatter 已是 DSH 原生，不需要改造。
+把账本 `skills\dev-hygiene\` **整个目录**复制到 `<skill 根>\dev-hygiene\`；frontmatter 已是 DSH 原生，不需要改造。
 
 ### 第 2 步：写常驻红线（必做，否则未加载 skill 的会话里规则不生效）
 

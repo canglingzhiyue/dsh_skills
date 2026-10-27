@@ -94,7 +94,8 @@ Rules:
   section.
 - **Commit and push after every change — the git history *is* the rollback mechanism** (the old dated
   `snapshots\ledger-YYYY-MM-DD.zip` scheme is retired). After editing the ledger, re-sync `skills\` and
-  `config\`, append a line to `CHANGELOG.md`, then `git add -A && git commit -m "<type>: <what>" && git push`.
+  `config\`, append a line to `CHANGELOG.md`, then **`git add <explicit paths> && git commit -m "<type>: <what>" && git push`**
+  (**never `git add -A`** — see the dev-hygiene red line, it swallows other sessions' uncommitted work).
   Roll back with `git revert <commit>` or `git checkout <commit> -- <path>` — strictly better than a zip:
   it diffs, it tells you which change broke things, and it restores a single file. Details in the
   `skills-inventory` skill.
@@ -123,6 +124,10 @@ Format and migration instructions: load the `skills-inventory` skill.
   uv 本体 = `C:\Users\y\.local\bin\uv.exe`（**独立安装**，2026-09-30 起 anaconda 已整机移除）；
   本机 PATH 上**没有可用的 `python`**（只剩 WindowsApps 的 0 字节 Store 存根）——一律 `uv run` 或环境的绝对路径。
 - **每个开发阶段收尾清理无用文件**（限本项目目录内、走回收站），交付前再清一次；删完报告清单与释放空间。
+- **Git 提交一律显式列路径**：禁 `git add -A` / `git add .` / `git commit -a`（账本仓库与工作区可能同时有别的会话在改，
+  `-A` 会吞掉别人的未提交改动 —— 2026-10-27 实测踩过）；**不重写已推送历史**（`reset --hard` / `amend` / `force push`）；
+  提交前看 `git diff --numstat`，整文件级变更多半是行尾符/编码变了（`--ignore-cr-at-eol` 可辨）；push 后
+  `git status -sb` 必须无 ahead/behind。细则见 `dev-hygiene` 规则 6。
 - **每个项目产出 `HANDOVER.md`**（项目根、中文）：环境 / 从零重建命令 / 运行与验证 / 目录结构 / 数据与凭据来源
   （只写从哪取）/ 已知坑 / 变更记录 / 回退方式 / 待办；**更新前先把旧版复制到
   `docs\handover-history\HANDOVER-YYYY-MM-DD.md`**；项目完事且重建命令已验证时可删 `.venv`（先问一次）。

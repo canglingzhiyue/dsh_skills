@@ -126,10 +126,40 @@ Copy-Item $h (Join-Path $d ("HANDOVER-{0:yyyy-MM-dd}.md" -f (Get-Date)))
 
 **阈值**：凡产出可复用产物（脚本、数据、项目）都写；纯一次性查询、<30 行的试验脚本可在 `README.md` 里放三行版（做什么 / 怎么跑 / 依赖什么），不单开文件。
 
+## 规则 6 —— Git 提交红线（2026-10-27 实测踩过，多会话环境尤其致命）
+
+- **提交一律显式列路径**：`git add <路径1> <路径2> ...`。**禁用 `git add -A` / `git add .` / `git commit -a`**。
+  ★ 本机的账本仓库（`D:\AI_python\skills_backup`）和默认工作区可能**同时有别的会话在改**；`-A` 会把
+  你从没打开过的、别人未提交的改动一起吞进你的提交，提交信息还写着你的活儿。
+  **实测**：2026-10-27 我 `git add -A` 把另一会话未提交的 `plugins\dsh-skillhub\RECIPE.md` 与
+  `INSTALL.md` / `SKILLS.md` 追加（共 302 行）带进了 `5817940`，对方随后只能把剩余文件另提一条。
+- **提交前逐文件确认归属**：`git status --porcelain` 过一遍，问自己"这个文件我这次动过吗"。
+  不认识/没动过的改动 → **不 add、不覆盖、不回滚**，大概率是并发会话的 WIP。
+- **不重写已推送的历史**：`git reset --hard`、`git commit --amend`、`git push --force` 在共享仓库里会
+  打断正基于同一 HEAD 工作的会话/人。**误带了别人的文件 → 补一条说明性提交或让属主自己记一笔，不回滚**
+  （2026-10-27 就按这条处理：保留 `5817940`，对方 `40a396d` 在其上正常提交，双方内容都在）。
+- **提交前看 `git diff --numstat`**：某文件行数异常巨大（几乎整文件重写）**先怀疑行尾符或编码变了**，
+  不是内容变了。`.gitattributes` 写成 `* -text` 的仓库（本机账本就是）**逐字节存储**，CRLF↔LF 会让每一行
+  都算改动；`git diff --ignore-cr-at-eol` 一眼识别。
+  ★ **实测**：用 `[IO.File]::WriteAllLines` 重写 CHANGELOG 后 `--numstat` 显示 `2376 行`变更，实际只新增 46 行
+  —— 原因是 WriteAllLines 固定写 CRLF 而仓库里是 LF。**改写文件要保留原行尾**（用 `edit` 工具，
+  或读成 byte/string 后按原样写回）。
+- **升级上游代码不碰脏工作树**：先 `git status` 记下本地已改/未跟踪文件 → 能用 `git merge --ff-only`
+  就**不要** `git stash` / `git checkout -f` → 升级后立刻复查那几个文件仍在。
+  ★ **判断"上游有没有新版"要看 commit，不能看 `VERSION` 文件**：上游可能进了几十个 commit 都没发版
+  （2026-10-27 实测 39 个 commit、`VERSION` 仍是 1.0.1）。用
+  `git rev-list --left-right --count HEAD...origin/main`，或 `git log --oneline HEAD..origin/main`。
+- **push 前后都验证**：`git remote -v` 确认推的是哪个仓库；push 后 `git status -sb` 必须显示
+  `## main...origin/main`（**没有** ahead/behind），`git log --oneline -1` 与远端一致。
+  本机直连 GitHub 常 `Recv failure: Connection was reset`，走全局代理（已配 `http(s).proxy = 127.0.0.1:7890`）。
+- **并发下同步远端用 `merge` 不用 `pull --rebase`**：工作树有别人的未提交改动时 `pull --rebase` 会直接拒绝
+  （"cannot pull with rebase: You have unstaged changes"），`git merge` 允许脏工作树，只要不冲突就合并。
+
 ## 收尾清单（每次开发结束照做）
 
 - [ ] 垃圾文件已清（走回收站）并报告清单与空间
 - [ ] `HANDOVER.md` 已更新，且**曾先备份旧版**到 `docs\handover-history\`
+- [ ] 提交**显式列路径**（未用 `add -A`），`numstat` 无异常整文件级变更，push 后 `git status -sb` 无 ahead/behind
 - [ ] `.venv` 若已无用：确认 `uv.lock` + 重建命令已实测 → 问用户 → 硬删（豁免条款）
 - [ ] 本次没有任何非豁免文件被硬删
 - [ ] 项目内没有引用本机 skill 绝对路径
@@ -148,7 +178,7 @@ Copy-Item $h (Join-Path $d ("HANDOVER-{0:yyyy-MM-dd}.md" -f (Get-Date)))
 ## 与其它 skill 的关系
 
 - **项目命名 / 位置 / 工作区结构**以 `camoufox-reverse` 为准（目标网站域名规范化、建目录前问用户）；**删除、清理、uv、交接文档**按本 skill。
-- 本 skill 自身被修改时，按 `skills-inventory` 的流程重新整份复制到 `local\skill\dev-hygiene\` 并追加账本日志。
+- 本 skill 自身被修改时，按 `skills-inventory` 的流程重新整份复制到账本的 `skills\dev-hygiene\` 并追加账本日志。
 
 ## 边界
 

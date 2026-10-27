@@ -14,6 +14,33 @@
 
 ---
 
+## 2026-10-27 —— rule: 新增「Git 提交红线」（dev-hygiene 规则 6）+ 修正账本的提交命令
+
+- **变更类型**：rule（用户要求「记住这次 github 操作的经验教训」）
+- **起因（实测事故）**：reverse-skill 上游升级的第二次提交用了 `git add -A`，把**另一并发会话未提交**的
+  `plugins\dsh-skillhub\RECIPE.md` + `INSTALL.md` / `SKILLS.md` 追加（共 302 行）吞进 `5817940`；
+  对方随后只能把剩余文件另提一条 `40a396d`。处理原则：**不重写已推送历史**（不 `reset --hard`、
+  不 `amend`、不 `force push`），两边的改动都在，无损。
+- **内容**：
+  1. **`dev-hygiene` 新增规则 6「Git 提交红线」**：显式路径 `git add`（禁 `-A` / `add .` / `commit -a`）、
+     提交前用 `status --porcelain` 逐文件确认归属、不重写已推历史、`git diff --numstat` 里整文件级变更
+     先怀疑行尾符/编码（`* -text` 仓库逐字节存储，`--ignore-cr-at-eol` 可辨；`WriteAllLines` 固定 CRLF 是坑）、
+     升级上游用 `--ff-only` 且不碰脏工作树、**"上游有没有新版"看 commit 不看 `VERSION`**、
+     push 后 `git status -sb` 必须无 ahead/behind、并发下同步远端用 `merge` 而非 `pull --rebase`。
+     收尾清单同步加一条勾选项。
+  2. **`skills-inventory` 的「④ 提交推送」由 `git add -A` 改为显式列路径**，并新增「为什么这里必须显式列路径」
+     与「并发会话下的账本操作」两小节（账本是多会话共享仓库，正是事故现场）。
+  3. **`$DSH_HOME/AGENTS.md`**：dev-hygiene 常驻段加 1 行 Git 红线（5 行 → 6 行）；并把它自己那句
+     `git add -A && git commit -m … && git push` 改成显式路径 —— **原句与新红线直接冲突，必须就地修**。
+  4. **`INSTALL.md`**：dev-hygiene 节「五条硬规则」→「六条」、红线行数 5 → 6、顺手修掉 legacy 的
+     `local\skill\dev-hygiene\` 路径（实际是账本 `skills\dev-hygiene\`）。
+- **影响文件**：`skills\dev-hygiene\SKILL.md`、`skills\skills-inventory\SKILL.md`、`config\AGENTS.md`、
+  `INSTALL.md`、`SKILLS.md`、`CHANGELOG.md`。
+- **本次提交本身即示范**：`git add` 显式列上述 6 个路径（**不用 `-A`**），提交前 `status --porcelain`
+  逐项确认都是本会话产生的改动。
+
+---
+
 ## 2026-10-27 —— install: `dsh-skillhub`（技能与 MCP 统一开关面板）+ 本机 schemastery 适配
 
 - **变更类型**：install（用户要求「根据当前环境适配这个仓库 https://github.com/aa2246740/dsh-skillhub」）

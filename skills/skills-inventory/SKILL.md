@@ -323,13 +323,34 @@ Get-ChildItem "$env:USERPROFILE\.dsh\.agent-presets" -Directory | ForEach-Object
 
 # ③ 更新 SKILLS.md（追加日志）+ CHANGELOG.md（追加变更说明）
 
-# ④ 提交推送
-git add -A
+# ④ 提交推送 —— **只 add 你这次真的改过的路径**，禁 git add -A / commit -a
+git status --porcelain                      # 逐项确认归属：不认识的改动一律不提交
+git add skills\dev-hygiene\SKILL.md SKILLS.md CHANGELOG.md   # ← 显式列（路径按本次实际改的填）
 git commit -m "<类型>: <一句话说明>"
 git push
+git status -sb                              # 期望 ## main...origin/main，无 ahead/behind
 ```
 
 **提交信息约定**：`install:` / `update:` / `remove:` / `rule:` / `config:` + 一句话。
+
+### ★ 为什么这里必须显式列路径（2026-10-27 实测事故）
+
+账本仓库是**多会话共享**的：同一个 `D:\AI_python\skills_backup` 可能同时有别的会话在写新条目。
+`git add -A` 会把**你从没打开过的、别人未提交的改动**一起吞进你的提交 —— 提交信息还写着你的活儿：
+
+- 实测：我在做 reverse-skill 上游升级，第二次提交用了 `git add -A`，把另一会话未提交的
+  `plugins\dsh-skillhub\RECIPE.md` + `INSTALL.md` / `SKILLS.md` 追加（共 302 行）带进了 `5817940`；
+  对方随后只能把剩余文件另提一条 `40a396d`。
+- 处理原则（当时就这么做的）：**不重写已推送历史**（不 `reset --hard`、不 `amend`、不 `force push`）——
+  那会打断对方基于同一 HEAD 的工作。误带了就补一条说明，或让属主自己记一笔。
+- 通用规则与更多坑（行尾符、`numstat` 异常、ff 升级、push 后验证）见 `dev-hygiene` 规则 6。
+
+### 并发会话下的账本操作
+
+- 动手前先 `git status --porcelain`；**看到不是自己产生的改动 → 不要覆盖、不要回滚、不要提交**。
+- 对方推了新提交、而本地工作树还脏着：用 `git merge`（或 `git pull --no-rebase`）——
+  `git pull --rebase` 在脏工作树会直接拒绝（"cannot pull with rebase: You have unstaged changes"）。
+
 
 ### 怎么回退
 
