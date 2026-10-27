@@ -1,4 +1,4 @@
-#Requires -Version 7.0
+﻿#Requires -Version 7.0
 <#
 .SYNOPSIS
     逆向模式能力扫描器 —— 生成 capabilities.json / capabilities.md，并做悬空引用检查。

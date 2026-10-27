@@ -1,4 +1,4 @@
-#Requires -Version 7.0
+﻿#Requires -Version 7.0
 <#
 .SYNOPSIS
   重建 reverse-skill 路由包（克隆 → 工具清单 → 路由自检 → 冒烟）。
@@ -20,7 +20,7 @@
 param(
     [string] $RepoPath = (Join-Path $env:USERPROFILE '.dsh\reverse-skill'),
     [string] $Proxy    = $env:REVERSE_SKILL_PROXY,
-    [string] $Commit   = '7e2097fd90d25c2f976f6eba26d6c00aa88051df',
+    [string] $Commit   = 'cab634bd855fc287f6e420c1f36fd1a6b9245960',
     [switch] $Pull
 )
 
@@ -65,6 +65,11 @@ $smokeOut = Join-Path $env:TEMP 'rs-smoke'
 New-Item -ItemType Directory -Force -Path $smokeOut | Out-Null
 pwsh -NoProfile -File (Join-Path $RepoPath 'skills\scripts\master-route.ps1') `
     -Hint 'offline apk reverse jadx' -OutDir $smokeOut
+
+# 路由基准回归：改路由而不加用例会被 verify-routing-coherence 的反向覆盖检查拦住，
+# 所以这里顺带跑一次，确认 44 条路由的用例仍然全绿（期望 PASS = TOTAL）。
+Step '路由基准回归 test-routing'
+pwsh -NoProfile -File (Join-Path $RepoPath 'skills\scripts\test-routing.ps1')
 
 Step ("完成：commit " + (git -C $RepoPath rev-parse --short HEAD))
 Write-Host '红线：缺工具先报清单并问用户，不要自行跑 skills\scripts\bootstrap-reverse.ps1；' -ForegroundColor Yellow

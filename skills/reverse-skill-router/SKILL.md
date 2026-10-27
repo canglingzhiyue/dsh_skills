@@ -129,6 +129,10 @@ pwsh -NoProfile -File "$env:USERPROFILE\.dsh\skills\reverse-skill-router\scripts
 
 它刷新 `capabilities.md/json`，并按域注册表做**悬空引用检查**（引用的技能不存在时列出来）。发现悬空引用就修引用，不要静默忽略。新增/删除 MCP 或插件后需**先重启 DSH 再扫描**，否则清单读到的是旧挂载。
 
+⚠ **不要给扫描器接管道**（`| Select-Object -Last 25`、`| Tee-Object` 都算）：它会用 `adb devices` 拉起**常驻 `adb server`**，
+该进程继承 stdout 管道句柄，管道等不到 EOF，看起来就是"卡死"（2026-10-27 实测：管道版 8 分钟无输出、被杀；
+`*> $env:TEMP\scan.log` 重定向版 1 分钟内 `exit=0`）。要么重定向到文件再读，要么加 `-SkipDevice`。
+
 **MCP 该加在哪（本机 2026-10-09 起的机制，别加错层）**：加 `$DSH_HOME\profiles\web\cordis.patch.yml`
 里 `reverse-mcp-activator` 行的 `config.servers` 数组 —— 那是**会话创建时按需挂载**的层。
 **不要**加到 `presets\reverse\agent.cordis.yml`：DSH 0.2.0 会急切挂载所有已声明 preset，写进

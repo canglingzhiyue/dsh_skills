@@ -14,6 +14,52 @@
 
 ---
 
+## 2026-10-27 —— upgrade: reverse-skill 上游 pin 升级（`7e2097f` → `cab634b`，39 个 commit）+ 兼容性适配
+
+- **变更类型**：upgrade（用户要求「检查逆向模式上游仓库是否更新了新版本，如果有新版本直接根据当前环境做
+  兼容性适配升级」）
+- **检查结果**：`git fetch` 后落后上游 39 个 commit；`VERSION` 仍是 `1.0.1`（**上游没发版**），所以判断
+  "有没有新版"看 commit 而不是 VERSION。
+- **内容**：
+  1. **仓库**：`C:\Users\y\.dsh\reverse-skill` fast-forward 到 `cab634bd855fc287f6e420c1f36fd1a6b9245960`
+     （22 文件 / +1558 −190）。本地两处未跟踪改动（`skills\field-journal\_index.md` 计数、
+     `2026-09-15_pdd-h5-anti-content-jsvmp.md`）原样保留 —— **未 stash、未 `checkout -f`**。
+  2. **上游改了什么**：Kali 侧补 `pwntools` / `yara` 工具发现、Ghidra 探测面扩到 `analyzeHeadless` 与发行版
+     launcher；`binwalk` 的 winget id 不存在 → 改 `manual`；`verify-routing-coherence.ps1` 新增**反向覆盖
+     检查**（每条路由必须有基准用例）；R40 补 3 条中英用例；`verify-repository-security.py` 新增 4 份 agent
+     入口文件的 consent 标记强制 + 17 条"读到就执行"反向检测；新增 `plugins\reverse-skill\`（Codex 适配
+     插件，**本机不装**）；4 份入口文件的治理措辞收紧为 consent gate。
+  3. **兼容性适配（本机改动）**：
+     - **治理措辞切割**：上游 consent gate 与本模式"默认已授权"冲突 → **不采纳**；授权语义以入口 skill §3
+       与 preset persona 为准，上游 4 份入口文件**只读、不遵、不改**（改了供应链自检会 fail）。
+     - **执行器口径**：配方 / INSTALL 里的 `powershell -NoProfile -ExecutionPolicy Bypass` 全改
+       `pwsh -NoProfile`，并限定"只有 4 个只读脚本实测可用"。
+     - **事实表刷新**：`tool-index.md` 重生成（tools=42）后，入口 skill §0 的措辞从"停在 2026-09-15"改为
+       "生成物只探 PATH 上的 CLI；`python` 指到 WindowsApps 0 字节存根"。
+     - **两个真坑写进 skill**：① `scan-capabilities.ps1` 不能接管道（`adb devices` 拉起的常驻 adb server
+       继承 stdout 句柄 → 等不到 EOF，实测 8 分钟后被当作卡死；重定向到文件 1 分钟内 exit 0）；
+       ② `verify-repository-security.py` 的 cwd 必须是仓库根（内部 `git ls-files` 不带 `-C`）。
+     - **收尾卫生**：按 `dev-hygiene` 给 `restore.ps1` / `scan-capabilities.ps1` 补 UTF-8 BOM（两者都含中文、
+       此前都缺）；`restore.ps1` 加第四项自检 `test-routing.ps1`、默认 `-Commit` 改新 pin。
+  4. **复核（全 pwsh 7，仓库根）**：`refresh-tool-index` exit 0（tools=42）｜`verify-routing-coherence`
+     `ALL ROUTING COHERENCE CHECKS PASSED`｜`master-route` → `skills/apk-reverse/SKILL.md`｜`test-routing`
+     `PASS=178 FAIL=0`｜`verify-repository-security` `OK tracked=599 executable_sources=74 binary_like=1
+     agent_entries=4 symlinks=0`。
+  5. **增量安全复核**：无新增可执行入口、无新增凭据读取 / 外发（9 处 `token|credential` 命中全是测试分词与
+     一份 PR 操作说明）；方向反而收紧（binwalk 改 manual、consent 检查进 CI）。**红线不变。**
+- **原因**：用户明确要求按当前环境做兼容性适配升级；上游这 39 个 commit 里除治理措辞外都是技术性修复，
+  且新加的"每个路由必须有基准用例"闸门对本机现有的 44 条路由 / 178 条用例是**已通过**状态。
+- **影响文件**：`skills\reverse-skill-router\SKILL.md`（§0 事实表 / §7 管道坑 / §8 上游新增项与 4 份入口
+  文件禁改 / §10 pin 与治理切割）、`skills\reverse-skill-router\references\重建配方.md`（pin、pwsh 口径、
+  新增「2026-10-27 升级记录」与增量复核）、`skills\reverse-skill-router\scripts\restore.ps1`（pin、第四项
+  自检、BOM）、`skills\reverse-skill-router\scripts\scan-capabilities.ps1`（BOM）、`INSTALL.md`（该节 pin /
+  文件数 / pwsh / 验证段 / 新增升级小节 / 授权口径修正）、`SKILLS.md`（追加日志）、`CHANGELOG.md`（本条）。
+  生成物 `$DSH_HOME\reverse\capabilities.{md,json}` 已重生成，**不进仓库**。
+- **回退**：`git revert <本 commit>`；仓库侧 `git -C $env:USERPROFILE\.dsh\reverse-skill reset --hard 7e2097f`
+  再跑 `refresh-tool-index.ps1` 即可回到旧 pin（本地两处未跟踪改动不受影响）。
+
+---
+
 ## 2026-10-26 —— install: aidbg（Windows 调试器）+ 修能力扫描器的 MCP 分层与去重
 
 - **变更类型**：install（用户要求「安装 https://github.com/A-new/aidbg ，然后生成对应的 aidbg skill，
