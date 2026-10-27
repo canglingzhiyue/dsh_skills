@@ -17,10 +17,11 @@
       "label": "Web / 前端 JS",
       "depth": "deep",
       "primarySkills": ["camoufox-reverse"],
-      "supportingSkills": ["anything-analyzer", "reverse-skill-router"],
-      "entryHint": "camoufox MCP（39 工具，launch_browser 起）做反指纹浏览、Hook、JSVMP/签名参数定位；先取证复现再谈 AST 清洗。",
+      "supportingSkills": ["anything-analyzer", "iv8-js-sandbox", "reverse-skill-router"],
+      "entryHint": "camoufox MCP（39 工具，launch_browser 起）做反指纹浏览、Hook、JSVMP/签名参数定位；先取证复现再谈 AST 清洗。轻量场景（纯算法签名、无需浏览器行为）可用 iv8-js-sandbox：纯 Python 运行 V8 + 模拟浏览器环境，毫秒级、可多线程。",
       "supportRoles": {
-        "anything-analyzer": "浏览器侧抓包留档与前端加密速查：内嵌浏览器 CDP 抓包 + JS Hook（fetch/XHR/crypto.subtle/CryptoJS/SM2-4）零配置记录，Agent 经 MCP 直读。只有在「不需要指纹对抗」时才用它——它的指纹伪造只在 JS 层，且默认 UA 暴露工具名（可用 cdp_send_command + Network.setUserAgentOverride 洗掉）。有反爬的站点仍走 camoufox。"
+        "anything-analyzer": "浏览器侧抓包留档与前端加密速查：内嵌浏览器 CDP 抓包 + JS Hook（fetch/XHR/crypto.subtle/CryptoJS/SM2-4）零配置记录，Agent 经 MCP 直读。只有在「不需要指纹对抗」时才用它——它的指纹伪造只在 JS 层，且默认 UA 暴露工具名（可用 cdp_send_command + Network.setUserAgentOverride 洗掉）。有反爬的站点仍走 camoufox。",
+        "iv8-js-sandbox": "轻量补环境臂：纯 Python 运行 V8 + 模拟浏览器环境（DOM/BOM/crypto/Canvas），适合只需算法结果、不需真实浏览器行为的场景。与 camoufox 的分工：先判断目标签名能否脱离浏览器算出来，能 → iv8（毫秒级、可多线程），不能 → camoufox。"
       },
       "acceptance": ["签名/加密参数可本地复现", "请求可重放成功"]
     },
@@ -59,12 +60,15 @@
     {
       "id": "windows",
       "label": "Windows / PE / .NET",
-      "depth": "shallow",
-      "primarySkills": [],
-      "supportingSkills": [],
-      "entryHint": "本机无 x64dbg / dnSpy / Ghidra / radare2；二进制侧可用 IDA 9.4 + idalib MCP。",
-      "fallback": "参考（未在本机验证）：C:\\Users\\y\\.dsh\\reverse-skill\\skills\\dotnet-reverse（28.6 KB）与 skills\\reverse-engineering\\references\\anti-analysis.md（32.4 KB，含 Windows PEB / 反 DBI 专节）。工具缺口先由 IDA MCP 补。",
-      "acceptance": []
+      "depth": "deep",
+      "primarySkills": ["aidbg"],
+      "supportingSkills": ["reverse-skill-router"],
+      "entryHint": "主技能 aidbg —— 本机 AI-first Windows x86/x64 调试器，exe 在 D:\\AI_python\\reverse\\aidbg\\aidbg.exe（v0.4.0，单文件、零 VC 运行时依赖）。JSONL CLI（-c / --script）优先，另有 13 工具 MCP（mcp__aidbg__*，由 reverse-mcp-activator 在**逆向模式会话创建时**挂载，普通会话不可见）。默认固定基址：运行期地址与 IDA/Ghidra 静态地址逐字节一致。覆盖断点（软/硬/内存/条件/命中命令）、单步与 rununtil、寄存器/内存/栈/CFG/PEB-TEB、导入表扫描-引用-重建与导入调用追踪、dump 可运行 PE、带原始字节记录的字节补丁（undo / 烘焙副本）、快照回退、反反调试 hide+detect。**本机仍无 x64dbg / dnSpy / Ghidra / radare2**：静态侧继续用 IDA 9.4 + idalib MCP，aidbg 补的是动态那一侧。",
+      "supportRoles": {
+        "reverse-skill-router": "能力扫描器负责 aidbg 的探活与版本（工具表 k=binary），并把 MCP 标为 activator 层（会话创建时按需）；普通会话里没有 mcp__aidbg__* 工具，需新开逆向模式会话或直接走 CLI"
+      },
+      "fallback": ".NET 反编译仍无本机工具：参考（未在本机验证）C:\\Users\\y\\.dsh\\reverse-skill\\skills\\dotnet-reverse（28.6 KB）与 skills\\reverse-engineering\\references\\anti-analysis.md（32.4 KB，含 Windows PEB / 反 DBI 专节）。",
+      "acceptance": ["目标行为在调试器里被直接观察到（断点命中 / 寄存器与内存证据），不是只读代码推断", "补丁类结论用 patch file 烘焙出的副本复跑验证，原文件保持不动", "反反调试结论区分 hide 覆盖了什么、没覆盖什么（直接系统调用 / 时序检查 / ntdll 完整性扫描）"]
     }
   ]
 }

@@ -1,0 +1,45 @@
+{
+  "_comment": "缺失 API 补丁索引。每发现一个 iv8 未内置、而目标 JS 需要的 API，就在这里加一条。tags 用于按需加载，always=true 的一律加载。",
+  "_schema": {
+    "id": "唯一标识，与文件名对应",
+    "file": "polyfills/ 下的 .js 文件名",
+    "symptom": "什么症状下需要它（探针命中的关键字 / 报错信息）",
+    "tags": [
+      "按场景加载的标签"
+    ],
+    "sites": [
+      "该站点档案名，命中则自动加载"
+    ],
+    "always": "true 表示每次无条件加载",
+    "note": "补充说明 / 已知坑",
+    "added": "加入日期 YYYY-MM-DD"
+  },
+  "polyfills": [
+    {
+      "id": "messagechannel-fallback",
+      "file": "messagechannel_fallback.js",
+      "symptom": "目标 JS 报 MessageChannel is not defined",
+      "tags": [
+        "legacy"
+      ],
+      "sites": [],
+      "always": false,
+      "note": "iv8 0.1.4 已内置 MessageChannel，此补丁仅对老版本或有特殊语义要求（如必须同步投递）的场景使用。加载前先用探针确认是否真的缺失 —— 无脑加载会覆盖掉内置的正确实现。",
+      "added": "2026-05-20"
+    },
+    {
+      "id": "akamai-surface",
+      "file": "akamai_surface.js",
+      "symptom": "Akamai sensor 脚本探测 window 上的 Akamai 对象或读取空对象",
+      "tags": [
+        "akamai"
+      ],
+      "sites": [
+        "akamai"
+      ],
+      "always": false,
+      "note": "只补 Akamai 相关脚本会读写的那几个全局位点，不伪造 _abck（那是服务端下发的 cookie，伪造会在校验时立刻暴露）。",
+      "added": "2026-05-20"
+    }
+  ]
+}

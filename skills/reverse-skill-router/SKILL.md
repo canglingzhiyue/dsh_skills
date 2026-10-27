@@ -13,12 +13,11 @@ description: 逆向模式的路由与治理层（域路由 / 授权登记 / 能�
 |---|---|---|---|
 | **能力清单** | `$DSH_HOME\reverse\capabilities.md`（人读）/ `capabilities.json`（机器） | 本机工具、MCP 挂载与探活、真机与模拟器、DSH 插件、技能清单 | `scripts\scan-capabilities.ps1`，**自动生成勿手改** |
 | **域注册表** | 本目录 `references\domain-registry.json` | 域 → 主技能 / 支撑技能 / 深度 / 入口要点 / 验收附加项 | 手工维护；扫描器读它做悬空引用检查 |
-| **上游素材库** | `$DSH_HOME\reverse-skill\`（599 文件 / 48 模块 / 89 个 SKILL.md） | 上游 reverse-skill 整包：路由表、field-journal 实战、深水 references | 外部仓库，按审查过的 commit pin |
+| **上游素材库** | `$DSH_HOME\reverse-skill\`（599 文件 / 49 个模块目录 / 89 个 SKILL.md = `skills\` 46 + `CTF-Sandbox-Orchestrator\` 42 + `plugins\` 1） | 上游 reverse-skill 整包：路由表、field-journal 实战、深水 references | 外部仓库，按审查过的 commit pin（当前 `cab634b`） |
 
 **本机事实一律以能力清单为准，不要凭记忆猜本机装了什么。** 上游整包里有已知过期/冲突记录，照它走会得到错误结论：
 
-- `skills\tool-index.md` 停在 2026-09-15，把 **jadx / IDA / frida / apktool 全标 Missing**，而本机 jadx MCP（8650 在线）与 IDA 9.4 MCP 都在；
-- 同一文件把 `python` 记成 `D:\ProgramsDev\anaconda3\python.exe`，与 `dev-hygiene` 红线冲突；
+- `skills\tool-index.md` 是**生成物**（本机 2026-10-27 重生成）：扫描器**只探 PATH 上的 CLI**，所以 **jadx / IDA / frida / apktool 仍全标 Missing**，而本机它们以 MCP 形式提供、照样可用；同一表把 `python` 指到 `%LOCALAPPDATA%\Microsoft\WindowsApps\python.exe`（0 字节 Store 存根），与 `dev-hygiene`「本机无可用 python，一律 `uv run`」冲突；
 - `skills\js-reverse\` 的 12 篇 references 全是 146–498 字节的 stub，**Web 域不要用上游**，用本机 `camoufox-reverse`。
 
 ## 1. 开工五步
@@ -38,7 +37,7 @@ description: 逆向模式的路由与治理层（域路由 / 授权登记 / 能�
 | Android / APK `android` | deep | `apk-reverse` | 权威内核（114 文件）+ **动态执行臂 `firerpa`** + **流量臂 `anything-analyzer`**；本机 jadx MCP + IDA MCP + Magisk 设备。开工前读 `apk-reverse\references\local-environment.md` |
 | 协议 / 非浏览器流量 `protocol` | deep | `anything-analyzer` | Electron GUI + 内置 MCP Server（`127.0.0.1:23816`，30 工具）抓手机 App / 桌面应用 / CLI / 脚本 / IoT 的流量，Agent 经 MCP 直读会话。**GUI 必须运行**，先跑 `scripts\probe-mcp.ps1` 探活。改包用 mitmdump（本工具 MITM 只读） |
 | iOS `ios` | shallow | — | 本机**无** iOS 主技能与 ipa/otool/class-dump 工具链。降级：参考上游 `skills\mobile-reverse\references\ios-reverse-guide.md`（**未验证**），新结论必须标注「未验证」 |
-| Windows / PE / .NET `windows` | shallow | — | 本机无 x64dbg / dnSpy / Ghidra / radare2。降级：二进制侧用 IDA 9.4 + idalib MCP；.NET 参考上游 `skills\dotnet-reverse`（28.6 KB）与 `reverse-engineering\references\anti-analysis.md`（32.4 KB，含 Windows PEB 与反 DBI 专节） |
+| Windows / PE / .NET `windows` | deep | `aidbg` | 本机 AI-first Windows x86/x64 调试器 `D:\AI_python\reverse\aidbg\aidbg.exe`（v0.4.0，单文件）：**JSONL CLI 优先**（`-c` / `--script`），另有 13 工具 MCP（`mcp__aidbg__*`，由 `reverse-mcp-activator` 在**逆向模式会话创建时**挂载）。默认固定基址 → 运行期地址与 IDA 静态地址一致；断点/单步/CFG/PEB-TEB/IAT 追踪与重建/dump 可运行 PE/带原始字节记录的字节补丁/快照回退/hide+detect。**本机仍无 x64dbg / dnSpy / Ghidra / radare2**：静态侧继续用 IDA 9.4 + idalib MCP，.NET 反编译仍无工具 |
 
 `depth` 语义：**deep** = 本机有演练过的主技能；**shallow** = 只有未验证的参考资料；**absent** = 无落点。新增域 = 新增技能 + 在 `domain-registry.json` 加一行，**不要建空壳技能目录**（空壳会污染技能盘点，还会让路由选中一个没内容的技能）。
 
@@ -130,6 +129,13 @@ pwsh -NoProfile -File "$env:USERPROFILE\.dsh\skills\reverse-skill-router\scripts
 
 它刷新 `capabilities.md/json`，并按域注册表做**悬空引用检查**（引用的技能不存在时列出来）。发现悬空引用就修引用，不要静默忽略。新增/删除 MCP 或插件后需**先重启 DSH 再扫描**，否则清单读到的是旧挂载。
 
+**MCP 该加在哪（本机 2026-10-09 起的机制，别加错层）**：加 `$DSH_HOME\profiles\web\cordis.patch.yml`
+里 `reverse-mcp-activator` 行的 `config.servers` 数组 —— 那是**会话创建时按需挂载**的层。
+**不要**加到 `presets\reverse\agent.cordis.yml`：DSH 0.2.0 会急切挂载所有已声明 preset，写进
+composition 的 MCP 行会随 `dsh web` 一起拉起（正是要避免的），且本机 preset 里那几行已是
+迁移遗留的**历史参考副本、不生效**。扫描器的「层」列会标 `activator（逆向会话创建时按需）`，
+并自动跳过与 activator 同名的 preset 副本（否则重复计数）。
+
 ## 8. 上游素材库（`$DSH_HOME\reverse-skill\`）的正确用法
 
 **只读、按需、不执行它的 `.ps1`。** 值得按需查阅的深水资料：
@@ -137,16 +143,19 @@ pwsh -NoProfile -File "$env:USERPROFILE\.dsh\skills\reverse-skill-router\scripts
 - `skills\reverse-engineering\references\anti-analysis.md`（32.4 KB）——Linux/Windows 反调试、反 VM、**反 DBI（Frida 检测）**、反反汇编、菜谱 A–T。
 - `skills\reverse-engineering\references\ollvm-deobfuscation.md`（501 行）——10 种 OLLVM 变种、常量指纹、d810-ng 的 8 种 unflattener、分层顺序 `bcf → fla → sub`。
 - `skills\dsl-vm-reverse\SKILL.md`（380 行）——DSL VM 识别特征与 opcode 位域编码。
-- `skills\field-journal\`（21 篇真实项目 + 17 篇种子）——含"踩坑记录表"的可复用经验。
+- `skills\field-journal\`（21 篇真实项目 + 17 篇种子，本机另加 1 篇自制 `2026-09-15_pdd-h5-anti-content-jsvmp.md`）——含"踩坑记录表"的可复用经验。
 - `skills\edr-bypass-re\SKILL.md`——顺序性知识（先 ETW patch → 再 AMSI patch → 再 unhook）。
 - `skills\ida-reverse\SKILL.md`——10 条踩坑（含禁止 `taskkill /F /T`，会连带干掉 GUI `ida.exe`）。
+- `skills\config\routing.json` + `skills\tests\routing-benchmark.json`——路由表 **44 条** + **178 条**双语基准用例（`test-routing.ps1` 实测 178/178 PASS）；改路由必须同步改用例，`verify-routing-coherence.ps1` 现在**双向卡**：幽灵 expect 与「无用例的路由」都报错。
+- `plugins\reverse-skill\`——新增的 **Codex 适配插件**（`.codex-plugin\plugin.json` + 1 个 SKILL.md）。与 DSH 无关，**本机不装、不引**。
 
 不可信或不可外传的部分：
 
-- `skills\tool-index.md` 已过期（见 §0），**不要采信其工具结论**；
+- `skills\tool-index.md` 是生成物（见 §0），**不要采信其工具结论**；
 - `reports\` 里有一份**未脱敏的第三方 pentest 报告**（真实域名 + 可复现 PoC），不得外传、不得进任何镜像；
 - `pentest-tools\src-hunter\references\payloader\` 含 webshell / 反弹 shell 载荷文本，按需读取、不外传；杀毒告警时**不要关闭防护**（上游 `SECURITY.md` 同样要求）；
-- 整包执行链用 `powershell` 5.1，与 `dev-hygiene`（只用 pwsh 7）冲突，所以不执行。
+- 上游文档仍写 `powershell` 5.1；**实测只有 4 个只读脚本在 pwsh 7 下可用**（`refresh-tool-index.ps1` / `verify-routing-coherence.ps1` / `master-route.ps1` / `test-routing.ps1`，均 exit 0），其余脚本按 §6 分级处理，不因"能跑"就去跑。
+- **不要改上游那 4 份入口文件**（`AGENTS.md` / `RULES.md` / `RULES_zh.md` / `README_AI.md`）：新版 `verify-repository-security.py` 强制它们含 consent 标记，改了就 fail。该脚本还要求 **cwd = 仓库根**（内部 `git ls-files` 不带 `-C`），否则 `returned non-zero exit status 128`。
 
 恢复配方：`references\重建配方.md` + `scripts\restore.ps1`（已改 pwsh 7，仍按审查过的 commit pin，不追 main）。
 
@@ -155,6 +164,7 @@ pwsh -NoProfile -File "$env:USERPROFILE\.dsh\skills\reverse-skill-router\scripts
 | 场景 | 用哪个 |
 |---|---|
 | 逆向 App / 站点 / 小程序 / 二进制 | 本技能路由到域主技能 |
+| Windows PE 的**动态**分析：调试、断点、单步、dump 脱壳、IAT 重建、字节补丁、反反调试、快照回退 | `aidbg` —— windows 域主技能；`D:\AI_python\reverse\aidbg\aidbg.exe`，CLI（`--json -c` / `--script`）优先，`mcp__aidbg__*` 只在逆向模式会话里 |
 | Android **动态执行**：在真机/模拟器上驱动 UI 跑流程、补丁后的功能回归、必须让 App 自己跑起来才能观察的行为（网络、风控、崩溃复现） | `firerpa` —— Android 域的**动态执行臂**，属逆向流程的一部分。脚本必须落纯 ASCII 路径，先 `adb -s <serial> forward` 再 `--host localhost`，adb 用 `D:\ProgramsDev\adb\adb.exe` |
 | 抓包 / 协议还原：手机 App、桌面应用、CLI、Python 脚本、IoT 的流量，且要 Agent 直接读会话 | `anything-analyzer` —— `protocol` 域主技能；也是 web / android 域的**流量臂**。MITM 只读，要改包用 `mitmdump` |
 | 完整渗透测试、内网、漏洞利用、CTF | `pentest` 模式（`@howmp/dsh-pentest`），不是本模式 |
@@ -166,7 +176,9 @@ pwsh -NoProfile -File "$env:USERPROFILE\.dsh\skills\reverse-skill-router\scripts
 - `tool-index.md` 是新克隆里**不存在**的生成文件；上游路由缺它会缺工具信息 → 跑上游 `refresh-tool-index.ps1`，但**结果只作参考**，本机事实源是 `capabilities.md`。
 - `CTF-Sandbox-Orchestrator\` 必须与 `skills\` 同级（`routing.md` 的 `../CTF-Sandbox-Orchestrator/...` 相对路径依赖该结构），移动仓库要整包搬。
 - 本机 git 直连 GitHub 会 `Recv failure: Connection was reset`，克隆/更新走代理：从 `$env:REVERSE_SKILL_PROXY` 取，本机实际值见 `references\重建配方.md` 与账本 `INSTALL.md`。
-- 上游 pin 与本机版本：`7e2097fd90d25c2f976f6eba26d6c00aa88051df`。**不要跟随上游 main 升级**：新版把治理措辞收紧成"读仓库不等于授权执行 / 首次副作用前需获批"，与本模式的默认授权假设冲突；只手工挑技术性修复。
+- 上游 pin：`cab634b`（2026-10-27 由 `7e2097f` 升级，39 个 commit；`VERSION` 仍是 1.0.1，上游未发版）。**仍不追 main 浮动**：本次升级已核过 diff，改动集中在 pwntools / yara / Ghidra 的 Kali 发现、binwalk 改为手动安装、R40 基准补例 + 「每个路由必须有基准用例」新闸门，以及**治理措辞收紧**（`RULES.md` / `AGENTS.md` / `RULES_zh.md` / `README_AI.md` 新增"读仓库不等于授权执行 / 首次副作用前需获批"的 consent gate）。
+- **治理措辞冲突的处理方式（2026-10-27 定）**：上游那套 consent gate **不采纳** —— 本模式的授权语义以 §3（默认 granted、登记即留痕不是门禁）为准，preset persona 同样如此；上游 4 份入口文件只读不遵、也不改（改了 `verify-repository-security.py` 会红）。真正受限的仍只有 §6 的三级脚本分级。
+- 升级后必跑的四项自检（全 pwsh 7，均在仓库根执行）：`refresh-tool-index.ps1`（exit 0 / tools=42）、`verify-routing-coherence.ps1`（ALL PASSED）、`master-route.ps1 -Hint "offline apk reverse jadx"`（PRIMARY -> `skills/apk-reverse/SKILL.md`）、`test-routing.ps1`（178/178 PASS）；另加 `uv run --no-project python skills\scripts\verify-repository-security.py`（**cwd 必须是仓库根**）。
 - 维护命令（全用 pwsh 7）：
   ```powershell
   $REPO = "$env:USERPROFILE\.dsh\reverse-skill"

@@ -1,4 +1,4 @@
-﻿#Requires -Version 7.0
+#Requires -Version 7.0
 <#
 .SYNOPSIS
     逆向模式能力扫描器 —— 生成 capabilities.json / capabilities.md，并做悬空引用检查。
@@ -105,6 +105,7 @@ $specs = @(
     @{ n = 'emulator';       k = 'android'; p = @('D:\ProgramsDev\Android\SDK\emulator\emulator.exe'); c = ''; v = @() }
     @{ n = 'firerpa-venv';   k = 'android'; p = @('D:\AI_python\firerpa\.venv\Scripts\python.exe'); c = ''; v = @('-V') }
     # 二进制 / 原生
+    @{ n = 'aidbg';          k = 'binary';  p = @('D:\AI_python\reverse\aidbg\aidbg.exe'); c = 'aidbg'; v = @('--version') }
     @{ n = 'ida';            k = 'binary';  p = @('D:\ProgramsDev\IDA Professional 9.4\ida.exe'); c = ''; v = @() }
     @{ n = 'idalib';         k = 'binary';  p = @('D:\ProgramsDev\IDA Professional 9.4\idalib.dll'); c = ''; v = @() }
     @{ n = 'ghidra';         k = 'binary';  p = @(); c = 'ghidraRun'; v = @() }
@@ -166,17 +167,24 @@ foreach ($s in $specs) {
 
 # ── 2. MCP 挂载（从 profile 的 cordis.patch.yml + agent preset 的 composition 解析） ──
 #
-# MCP 能挂在两层，**语义完全不同，必须分开标注**：
+# MCP 能挂三层，**语义完全不同，必须分开标注**：
 #   - profile 层（host 组装）：`dsh web` 一启动就 spawn 全部服务器，所有会话都能
 #     看到它的工具 —— 代价是常驻进程与启动期同步等待（dsh-mcp-client 的 apply()
 #     要等「连接 + tools/list」完成，且没有懒加载配置项）。layer = 'profile'。
-#   - agent preset 层：只有**新会话真的选中该 preset** 时才 compose（`dsh-agent-presets`
-#     的 "reading never mounts" —— preset 是 DSH 里唯一的惰性挂载点），所以进程
-#     按需启动，工具也只对该 preset 的会话可见。layer = 'preset'。
+#   - activator 层（自研插件 `reverse-mcp-activator`）：**profile patch 里的一行**
+#     插件，启动时只加载自身；监听 `agent/created`，只有目标 preset 的会话创建时
+#     才 `ctx.plugin(McpClient, server)` 把服务器挂到该会话作用域。进程随会话存亡，
+#     工具只对该会话可见。配置在 `cordis.patch.yml` 的
+#     `reverse-mcp-activator.config.servers` 里。layer = 'activator'。
+#     **2026-10-09 起本机所有逆向 MCP 走这一层** —— 因为 DSH 0.2.0 的 preset
+#     registry 在启动期就急切挂载所有已声明 preset，写进 composition 的 MCP 行
+#     必然随 `dsh web` 拉起，"preset = 惰性挂载点"的语义已经不成立。
+#   - preset 层：composition 里的 `dsh-mcp-client` 行。本机 2026-10-09 之后
+#     `presets\reverse\agent.cordis.yml` 里的这几行是**迁移遗留的历史参考副本、
+#     不生效**（真实 composition 来自 profile patch 的内联 `preset-reverse` 块）——
+#     与 activator 同名的条目直接跳过，否则会重复计数并把"按需"误报成"常驻"。
 #
-# 2026-10-02 起本机 4 个逆向 MCP 全部从 profile 层移入 preset `reverse`：
-# 于是 `dsh web` 启动与普通会话零 MCP 进程，只有「逆向模式」会话才拉起它们。
-# 用工具前先看**层**这一列 —— preset 层的 MCP 在普通会话里根本不存在，
+# 用工具前先看**层**这一列 —— activator / preset 层的 MCP 在普通会话里根本不存在，
 # 要调用它必须先新开一个逆向模式会话。
 
 $mcpPorts = @{ 'jadx' = 8650; 'ida' = 0; 'camoufox' = 0; 'analyzer' = 23816 }
@@ -185,18 +193,34 @@ function Read-McpFromFile {
     <#
       解析一个 composition 文件里的 dsh-mcp-client 条目。
       只认「出现 serverName: 之后紧邻的缩进键」，所以同文件里别的列表项不会误入。
+
+      层判定（2026-10-26 补）：`- id: reverse-mcp-activator` 段落里的 serverName
+      条目**不是** profile 常驻挂载 —— 那是自研 activator 插件在「逆向模式会话创建时」
+      按需 `ctx.plugin(McpClient, server)` 挂的。段落边界 = 下一个顶层 `- id:` 行。
+      不区分的话，清单会把"按需"误报成"常驻"，还会和 preset 里的历史副本重复计数。
     #>
-    param([string]$Path, [string]$Layer, [string]$Owner)
+    param(
+        [string]$Path,
+        [string]$Layer,
+        [string]$Owner,
+        [string]$ActivatorId = 'reverse-mcp-activator'
+    )
     $found = @()
     if (-not (Test-Path -LiteralPath $Path)) { return $found }
     $cur = $null
+    $inActivator = $false
     foreach ($ln in @(Get-Content -LiteralPath $Path -ErrorAction SilentlyContinue)) {
+        if ($ln -match '^\s*-\s+id:\s*''?([A-Za-z0-9_\-]+)''?\s*$') {
+            $inActivator = ($Matches[1] -eq $ActivatorId)
+        }
         if ($ln -match 'serverName:\s*''?([A-Za-z0-9_\-]+)''?') {
             if ($cur) { $found += $cur }
+            $effLayer = if ($inActivator) { 'activator' } else { $Layer }
+            $effOwner = if ($inActivator) { $ActivatorId } else { $Owner }
             $cur = [ordered]@{
-                serverName = $Matches[1]; layer = $Layer; owner = $Owner
-                profile = $(if ($Layer -eq 'profile') { $Owner } else { $null })
-                preset = $(if ($Layer -eq 'preset') { $Owner } else { $null })
+                serverName = $Matches[1]; layer = $effLayer; owner = $effOwner
+                profile = $(if ($effLayer -eq 'profile') { $effOwner } else { $null })
+                preset = $(if ($effLayer -eq 'preset') { $effOwner } else { $null })
                 command = $null; transport = $null; url = $null
                 args = @(); timeoutMs = $null; failOnStartupError = $null
                 externalPrerequisite = $null; probe = $null
@@ -218,17 +242,26 @@ function Read-McpFromFile {
 }
 
 $mcp = @()
-# profile 层：host 组装，启动即拉起
+# profile 层：host 组装，启动即拉起；activator 段落在同一文件里，由函数按 id 段落判定
 if (Test-Path -LiteralPath $ProfilesRoot) {
     foreach ($prof in @(Get-ChildItem -LiteralPath $ProfilesRoot -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'node_modules' })) {
         $mcp += Read-McpFromFile -Path (Join-Path $prof.FullName 'cordis.patch.yml') -Layer 'profile' -Owner $prof.Name
     }
 }
-# preset 层：按需，只在选中该 preset 的新会话里存在
+# preset 层：composition 里的行。与 activator 同名的条目是 2026-10-09 迁移遗留的
+# 历史参考副本（不生效），跳过并单独记下来，免得清单重复计数。
+$stalePresetMcp = @()
+$activatorNames = @($mcp | Where-Object { $_.layer -eq 'activator' } | ForEach-Object { $_.serverName })
 $AgentsRoot = Join-Path $DshHome '.agent-presets'
 if (Test-Path -LiteralPath $AgentsRoot) {
     foreach ($preset in @(Get-ChildItem -LiteralPath $AgentsRoot -Directory -ErrorAction SilentlyContinue)) {
-        $mcp += Read-McpFromFile -Path (Join-Path $preset.FullName 'agent.cordis.yml') -Layer 'preset' -Owner $preset.Name
+        foreach ($e in @(Read-McpFromFile -Path (Join-Path $preset.FullName 'agent.cordis.yml') -Layer 'preset' -Owner $preset.Name)) {
+            if ($activatorNames -contains $e.serverName) {
+                $stalePresetMcp += "$($preset.Name)/$($e.serverName)"
+                continue
+            }
+            $mcp += $e
+        }
     }
 }
 
@@ -238,6 +271,7 @@ foreach ($m in $mcp) {
         'ida' { $m.externalPrerequisite = '本机 IDA 9.4 + idalib（路径见 %APPDATA%\Hex-Rays\IDA Pro\ida-config.json）' }
         'camoufox' { $m.externalPrerequisite = 'D:\AI_python\camoufox 独立 venv；首次使用先预热' }
         'analyzer' { $m.externalPrerequisite = 'Anything Analyzer GUI 必须处于运行状态（MCP Server 跑在 Electron 主进程里）；探活 pwsh -File $env:USERPROFILE\.dsh\skills\anything-analyzer\scripts\probe-mcp.ps1' }
+        'aidbg' { $m.externalPrerequisite = '本机 release 单文件 exe（D:\AI_python\reverse\aidbg\aidbg.exe，v0.4.0）；缺失/被隔离时静默少工具 —— 手工握手探活见 skills\aidbg\references\local-environment.md §4' }
         default { $m.externalPrerequisite = $null }
     }
     if ($mcpPorts.ContainsKey($m.serverName) -and $mcpPorts[$m.serverName] -gt 0) {
@@ -359,17 +393,26 @@ foreach ($t in $tools) {
 }
 foreach ($m in $mcp) {
     if ($m.probe -match 'listening = False') {
-        # preset 层的 MCP 是**按需**的：没有逆向模式会话在跑时，它的进程本来就不该存在
+        # preset / activator 层的 MCP 都是**按需**的：没有逆向模式会话在跑时，它的进程本来就不该存在
         # —— 端口没监听是正常态，不是故障。只有 profile（常驻）层才说明前置真的缺失。
         $suffix = if ($m.layer -eq 'preset') {
             "（注意：该 MCP 挂在 preset ``$($m.preset)``，属**按需**启动 —— 没有逆向模式会话在跑时它本就不该监听，此告警属正常态；先新建/使用一个逆向模式会话再复测）"
+        } elseif ($m.layer -eq 'activator') {
+            "（注意：该 MCP 由 ``reverse-mcp-activator`` 在**逆向模式会话创建时**按需挂载 —— 没有逆向模式会话在跑时它本就不该监听，此告警属正常态；先新建/使用一个逆向模式会话再复测）"
         } else { '' }
         $warnings += "MCP [$($m.serverName)] 外部前置未就绪：$($m.externalPrerequisite)$suffix"
     }
     if ($m.failOnStartupError -eq 'false') {
-        $where = if ($m.layer -eq 'preset') { "preset ``$($m.preset)``，按需" } else { 'profile 层，常驻' }
+        $where = switch ($m.layer) {
+            'preset' { "preset ``$($m.preset)``，按需" }
+            'activator' { 'activator 层，逆向会话创建时按需' }
+            default { 'profile 层，常驻' }
+        }
         $warnings += "MCP [$($m.serverName)]（$where）配了 failOnStartupError: false —— 前置缺失时它静默失效，用工具前先探活"
     }
+}
+if ($stalePresetMcp.Count -gt 0) {
+    $warnings += "preset 里有 $($stalePresetMcp.Count) 条 MCP 行是 2026-10-09 迁移遗留的**历史参考副本、不生效**（已跳过不计入清单）：$($stalePresetMcp -join ', ') —— 真实 composition 来自 profile patch 的内联 ``preset-reverse`` 块，MCP 由 ``reverse-mcp-activator`` 按需挂载"
 }
 if ($dangling.Count -gt 0) { $warnings += "存在悬空技能引用 $($dangling.Count) 条（见 danglingReferences）" }
 
@@ -416,6 +459,7 @@ $md.Add('')
 $md.Add('## 1. MCP 服务器（模型可直接调用）')
 $md.Add('')
 $md.Add('> **先看「层」这一列**：`profile` = 常驻（`dsh web` 启动即拉起，所有会话可见）；')
+$md.Add('> `activator` = **按需**（`reverse-mcp-activator` 在**逆向模式会话创建时**挂到该会话作用域，普通会话不存在）；')
 $md.Add('> `preset:<id>` = **按需**（只有选中该 preset 的新会话才 compose，普通会话里不存在这组工具）。')
 $md.Add('')
 $md.Add('| serverName | 层 | 归属 | command | 外部前置 | 探测 |')
@@ -424,8 +468,16 @@ foreach ($m in $mcp) {
     $probeText = if ([string]::IsNullOrWhiteSpace($m.probe)) { '-' } else { $m.probe }
     # stdio 挂载显示 command；streamable-http 挂载没有 command，显示 url
     $cmdText = if ($m.command) { $m.command } elseif ($m.url) { "$($m.transport) $($m.url)" } else { '' }
-    $layerText = if ($m.layer -eq 'preset') { "preset:$($m.preset)" } else { 'profile（常驻）' }
-    $ownerText = if ($m.layer -eq 'preset') { '预设会话' } else { $m.profile }
+    $layerText = switch ($m.layer) {
+        'preset' { "preset:$($m.preset)" }
+        'activator' { 'activator（逆向会话创建时按需）' }
+        default { 'profile（常驻）' }
+    }
+    $ownerText = switch ($m.layer) {
+        'preset' { '预设会话' }
+        'activator' { '逆向会话' }
+        default { $m.profile }
+    }
     $md.Add("| ``$($m.serverName)`` | $layerText | $ownerText | ``$cmdText`` | $($m.externalPrerequisite) | $probeText |")
 }
 $md.Add('')

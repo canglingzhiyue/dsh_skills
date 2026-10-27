@@ -14,6 +14,49 @@
 
 ---
 
+## 2026-10-26 —— install: aidbg（Windows 调试器）+ 修能力扫描器的 MCP 分层与去重
+
+- **变更类型**：install（用户要求「安装 https://github.com/A-new/aidbg ，然后生成对应的 aidbg skill，
+  配置到 reverse-router 中或者逆向环境中」）
+- **内容**：
+  1. **可执行文件**：`D:\AI_python\reverse\aidbg\aidbg.exe`（v0.4.0，1,715,200 B，SHA256
+     `FCD5A086251CFA5B910851E136142C2F80AE66A043E6477003D7F7A7DBD28A6E`）。**不构建** ——
+     本机没有 MSVC / CMake，上游 `build.bat` 跑不通，直接用 release 单文件（零 VC 运行时依赖）。
+  2. **新 skill `aidbg`**（`skills\aidbg\`，3 文件约 21 KB）：`SKILL.md`（DSH 化，frontmatter 只留
+     name/description，490 字符）+ `references\commands.md`（上游命令表原文 + 本机补充行）+
+     `references\local-environment.md`（重建配方、MCP 挂载位置、5 条验证、6 条实测坑）。
+  3. **接入 reverse-skill-router**：windows 域 `shallow` → `deep`、`primarySkills: ["aidbg"]`
+     （`references\domain-registry.json`）；`SKILL.md` §2 域表与 §9 边界表各加一行；§7 补
+     「MCP 该加在哪（别加错层）」；能力扫描器工具表加 `aidbg`（`k=binary`，`--version` 探活）。
+  4. **MCP 挂载**：`config\cordis.patch.yml` 的 `reverse-mcp-activator.config.servers` 末尾加
+     `serverName: aidbg`（stdio，`--mcp`，13 工具，`toolCallTimeoutMs: 120000`，
+     `failOnStartupError: false`）—— 逆向模式会话创建时按需挂载。
+- **顺带修的既有缺陷（扫描器）**：`scan-capabilities.ps1` 此前把 `reverse-mcp-activator` 段里的
+  `serverName` 一律标成 `layer: profile`（= 常驻），而它实际是**会话创建时按需**；同时 preset 里
+  2026-10-09 迁移遗留的 5 条 MCP 历史副本被**重复计入** → 清单显示 10 条 MCP 而本机实际只有 5 台。
+  现改为：① 按 `- id: reverse-mcp-activator` 段落边界识别，条目标 `layer: activator`；
+  ② 跳过与 activator 同名的 preset 副本并单独告警。清单变为 6 条（含 aidbg）。
+- **原因**：用户要求安装该仓库并「配置到 reverse-router 或逆向环境中」。选择 CLI + MCP 双路径：
+  CLI 是上游主设计（JSONL，不挑会话类型、不依赖挂载），MCP 让逆向模式会话能直接调结构化工具。
+- **影响文件**：`skills\aidbg\`（新增 3 文件）、`skills\reverse-skill-router\SKILL.md`、
+  `skills\reverse-skill-router\references\domain-registry.json`、
+  `skills\reverse-skill-router\scripts\scan-capabilities.ps1`、`config\cordis.patch.yml`、
+  `SKILLS.md`、`INSTALL.md`（MCP 节 5→6 台、新增 aidbg 小节、wireshark 小节挂载位置勘误）、本文件。
+- **实测证据**：`aidbg.exe --version` → `aidbg 0.4.0`；调试 `C:\Windows\System32\whoami.exe` 停在
+  `entry`，`disasm` / `stack` / `read` / `eval` / `bl` / `snapshot list` / `hide status` / `modules`
+  全部 `ok:true`、退出码 0；MCP 手工 JSON-RPC 握手 `tools/list` 返回 **13** 个工具；
+  `dsh --profile web --dump-config` 退出码 0 且组合树里出现 `serverName: aidbg`；能力扫描器重跑：
+  `aidbg` present / `aidbg 0.4.0`、6 条 MCP 全在 `activator` 层、windows=deep、悬空引用 0。
+- **未验证 / 待用户实测**：重启 DSH 后新开「逆向模式」会话确认 `mcp__aidbg__*`；中文路径目标；
+  `detect` 在真实加固样本上的表现。
+- **顺带同步（不是我改的，是仓库落后于环境）**：`config\AGENTS.md` —— 用户在 2026-10-21 加的
+  「代码风格 — 所有 worker 通用」整节此前没进仓库；`config\profile\package.json` ——
+  DSH 自动 reconcile 后 `dsh.profile.bundles` 的顺序变了（无实质变化）；`skills\iv8-js-sandbox\` ——
+  2026-10-09 已记账、但镜像一直缺失，本次补上（20 文件）。`$DSH_HOME\settings.yaml` 当前不存在
+  （DSH 自己迁移过），仓库里那份 `config\settings.yaml` 保留不动。
+- **回退**：`git revert <commit>`（skill 与扫描器改动都在本提交内）；只回退 MCP 挂载就删掉
+  `cordis.patch.yml` 里 `- serverName: aidbg` 那一段；exe 与 skill 目录无系统级副作用。
+
 ## 2026-10-24 —— config: 第三方模型接入的上下文长度统一调成 1M
 
 - **变更类型**：config（用户要求）

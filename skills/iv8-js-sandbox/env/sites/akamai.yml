@@ -1,0 +1,47 @@
+# Akamai Bot Manager 站点档案
+#
+# 这类站点的核心特征是 _abck / bm_sz cookie 的**多次往返累积**，
+# 以及 sensor_data 里携带的行为数据。补环境只能解决其中一部分。
+#
+# 分类：高一致性要求档 —— 见 SKILL.md 的分流判断。
+
+name: akamai
+kind: 通用反爬厂商（Akamai Bot Manager）
+tags: [akamai, sensor_data]
+
+# 只在站点档案里覆盖，不进 base：
+# Akamai 的脚本会按 UA 做特性分支，UA 必须与该站点实际下发的资源匹配。
+environment:
+  navigator:
+    userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    vendor: "Google Inc."
+    userAgentData:
+      brands:
+        - brand: Chromium
+          version: "124"
+        - brand: Google Chrome
+          version: "124"
+        - brand: Not-A.Brand
+          version: "99"
+      mobile: false
+      platform: Windows
+
+# 该站点需要加载的 polyfill
+polyfills:
+  - akamai-surface
+
+# 运行时策略提示（供 iv8_run.py 读取，不是 environment 的一部分）
+runtime:
+  # sensor_data 依赖真实时间间隔，必须用 system 模式
+  time_mode: system
+  # 需要真实网络往返来累积 cookie，不能纯离线
+  needs_real_network: true
+  # 首次加载后需要等待的往返次数（经验值，按站点调整）
+  warmup_rounds: 2
+
+# 已知坑
+pitfalls:
+  - "_abck 有 ~ 和 ~-1~ 两种状态后缀，后者表示已被服务端标记异常；出现后换 IP + 清 cookie 重来，不要试图在客户端修补。"
+  - "sensor_data 里的时间戳是相对页面加载的毫秒数，iv8 的 logical 模式会把它压成 0，必须用 system 模式。"
+  - "类名/函数名混淆度极高，优先在 DevTools 里对 window.bmak 或 XHR 断点定位，不要硬读源码。"
+  - "同一会话内 sensor_data 会多次上报，每次的轨迹片段必须递增，不能复用同一份。"

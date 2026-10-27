@@ -29,6 +29,24 @@
 # `headers.Authorization` 从明文 token 改成了 `!!js process.env.ANALYZER_MCP_TOKEN`
 # 引用（token 现在在 `$DSH_HOME\.env`）。
 
+# ---------------------------------------------------------------------------
+# ⚠ 以上是 2026-10-02 的历史说明，**2026-10-09 起已被下面这套取代**
+# ---------------------------------------------------------------------------
+# 0.2.0 的 preset registry 会**在启动期急切挂载所有已声明 preset**
+# （`AgentPresetRegistry.activate()` → `mountPreset()`），所以"preset = 唯一惰性
+# 挂载点"的语义消失了：MCP 行只要写在任何 composition 里，就必然随 `dsh web` 拉起。
+#
+# 现行做法：MCP **又回到本层**，但不是作为 `dsh-mcp-client` 行，而是作为一行自研
+# 插件 `reverse-mcp-activator`（文件 `$DSH_HOME\plugins\reverse-mcp-activator\index.mjs`）。
+# 它在启动时只加载自身，监听 `agent/created`，只有逆向模式会话创建时才
+# `ctx.plugin(McpClient, server)` 把服务器挂到**该会话自己的作用域**上 ——
+# 进程随会话存亡、工具只对该会话可见。配置就在本文件末尾那行的
+# `config.servers` 数组里（camoufox / jadx / ida / analyzer / wireshark / aidbg）。
+#
+# 因此：**新增或修改 MCP 请改 `reverse-mcp-activator.config.servers`**；
+# `presets\reverse\agent.cordis.yml` 里残留的 MCP 行是迁移遗留的历史参考副本、
+# 不生效（能力扫描器会跳过并单独告警）。
+
 - id: llm-pi-ai
   name: "@deepseek-ai/dsh-llm-pi-ai"
   config:
@@ -105,9 +123,8 @@
 - id: agent-default-model
   name: "@deepseek-ai/dsh-agent-default-model"
   config:
-    provider: deepseek-account
-    model: deepseek-flash
-    reasoningEffort: high
+    provider: claudex
+    model: deepseek-v4.1-flash
 - id: ui-settings-general
   name: "@deepseek-ai/dsh-client-ui-settings-general"
   config:
@@ -548,5 +565,25 @@
             env:
               PYTHONUTF8: '1'
               PYTHONIOENCODING: 'utf-8'
+            toolCallTimeoutMs: 120000
+            failOnStartupError: false
+
+          # mcp-aidbg（Windows x86/x64 调试器，2026-10-26 新增）
+          # 上游 https://github.com/A-new/aidbg —— AI-first 调试器，单文件 exe、
+          # 零 VC 运行时依赖。`--mcp` 起 JSON-RPC stdio 服务、13 个工具（session /
+          # execute / breakpoint / registers / memory / disasm / stack / cfg /
+          # modules / eval / exceptions / snapshot / command），**不自动开调试会话**：
+          # 目标要在会话里 aidbg_session(action=file/run) 才起来，空闲时几乎不占资源。
+          # 会话**有状态**，同一会话内所有工具作用于同一个目标；进程随会话存亡。
+          # 本机没有 MSVC/CMake，**不要本地构建**：用 release 单文件，配方见
+          # `$DSH_HOME\skills\aidbg\references\local-environment.md`（含手工握手探活）。
+          # failOnStartupError: false —— exe 被移走/隔离时静默少工具、不拦会话创建；
+          # 用前先探活（期望 tools/list 返回 13 个工具）。
+          # 等价路径：skill 里的 CLI（`aidbg.exe --json -c ...`），不依赖 MCP、不挑会话。
+          - serverName: aidbg
+            transport: stdio
+            command: 'D:\AI_python\reverse\aidbg\aidbg.exe'
+            args:
+              - '--mcp'
             toolCallTimeoutMs: 120000
             failOnStartupError: false

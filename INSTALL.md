@@ -1214,15 +1214,15 @@ pwsh -NoProfile -File "$env:USERPROFILE\.dsh\skills\reverse-skill-router\scripts
 
 ## MCP（P2 独立类 · 网络来源 + 本地运行时）
 
-本机有 **5 个 MCP server**。它们**不是 skill、也不是 npm 插件**，而是一条 DSH 配置
+本机有 **6 个 MCP server**。它们**不是 skill、也不是 npm 插件**，而是一条 DSH 配置
 （`@deepseek-ai/dsh-mcp-client` 的条目）—— 但同样必须迁移，否则新环境会少掉这些工具。
 
 ### 挂在哪一层：`reverse-mcp-activator` 插件（会话创建时挂载，2026-10-09 起）
 
-**5 个 MCP 不再写在任何 composition 里**，而是由自研插件 `reverse-mcp-activator`
+**6 个 MCP 不再写在任何 composition 里**，而是由自研插件 `reverse-mcp-activator`
 （本仓库 `plugins\reverse-mcp-activator\`）在**新开逆向模式会话时**挂到该会话自己的
 作用域上。profile patch 里只有一行插件声明（`- id: reverse-mcp-activator`），它的
-`config.servers` 就是这 5 台服务器的完整配置。
+`config.servers` 就是这 6 台服务器的完整配置。
 
 搬了三次，每次都是为了让「进程何时启动」更贴近"要用才起"：
 
@@ -1253,14 +1253,14 @@ pwsh -NoProfile -File "$env:USERPROFILE\.dsh\skills\reverse-skill-router\scripts
 `config.servers`。
 
 ⚠️ **有效期**：MCP 只对**逆向模式会话**可见。要用 jadx / IDA / camoufox / analyzer /
-wireshark，必须先**新开一个「逆向模式」会话**。
+wireshark / aidbg，必须先**新开一个「逆向模式」会话**。
 
 **生命周期**：MCP 插件挂在 agent 自己的作用域下，agent 被拆掉时一起 dispose ——
 服务器**随会话结束而退出**。代价是**每个逆向会话有自己的一份服务器进程**（并发的逆向
 会话 = 多份，内存成倍），且开这个会话时快的那几台要等几秒。
 
 **挂载失败不会拦住会话**：每个 server 的 `failOnStartupError` 都是 `false`
-（该字段 schema 默认值就是 `false`；jadx / analyzer / wireshark-lite 显式写、
+（该字段 schema 默认值就是 `false`；jadx / analyzer / wireshark-lite / aidbg 显式写、
 camoufox / ida 用默认值）。所以服务器连不上时只是**静默少掉工具**，逆向会话仍能创建 ——
 用工具前务必按能力清单探活。能让会话创建失败的只有硬错误（activator 插件载入失败、
 某个 server 的 config 不符合 `dsh-mcp-client` 的 schema）。
@@ -1272,6 +1272,7 @@ camoufox / ida 用默认值）。所以服务器连不上时只是**静默少掉
 | ida | `ida` | `mcp__ida__*` | 本机 IDA 9.4 的 idalib（无独立目录，`uvx` 跑 PyPI 包，见下） |
 | analyzer | `analyzer` | `mcp__analyzer__*` | **Anything Analyzer Electron GUI**（`D:\ProgramsDev\AnythingAnalyzer`，约 300 MB，见下）—— 注意它是**唯一的 `transport: streamable-http` 挂载**，不是 stdio |
 | wireshark | `wireshark` | `mcp__wireshark__*` | 自研 `wireshark-mcp-lite` 单文件（`D:\AI_python\无实际文件区\wireshark-mcp-lite\`，uv，见下）+ 本机 Wireshark 的 tshark |
+| aidbg | `aidbg` | `mcp__aidbg__*` | 上游 release 单文件 `D:\AI_python\reverse\aidbg\aidbg.exe`（v0.4.0，1.7 MB，零 VC 运行时依赖，见下）—— Windows x86/x64 调试器 |
 
 ⚠️ **验证方式**：`dsh --profile web --dump-config` 能看到 `reverse-mcp-activator` 行及其
 `servers:` 配置（2026-10-09 起 MCP 挂在插件里，不再内联在 preset 声明块中，也不再是
@@ -1453,7 +1454,38 @@ profile 顶层条目）。真正的验证是三个方向：**启动日志零 MCP
   tshark 缺失只返回 `tshark_missing`，不拦会话创建（`failOnStartupError: false`）。
   本机实测修过一个真 bug：`dns.resp.addr` 在 tshark 4.6 是非法字段，已换 `dns.a`。
 - **不迁移 / 不备份**：项目 `.venv`（`uv sync` 可重建）、测试夹具 `test-dns.pcap`（randpkt 可重造）。
-  挂载条目在 `presets\reverse\agent.cordis.yml` 的 MCP 段里（`mcp-wireshark-lite`）。
+  挂载条目在 `config\cordis.patch.yml` 的 `reverse-mcp-activator.config.servers` 里
+  （⚠ 2026-10-09 起；`presets\reverse\agent.cordis.yml` 里那段是迁移遗留的历史副本、不生效）。
+
+### aidbg MCP（Windows x86/x64 调试器，2026-10-26 新增）
+
+- **上游**：https://github.com/A-new/aidbg —— AI-first Windows 命令行调试器，每个命令输出一行
+  JSON（JSONL），支持 `-c` 批处理 / `--script` / `--mcp` 三种驱动方式。本机用它补上 windows 域的
+  **动态**分析臂（此前该域只有静态侧 IDA MCP）。
+- **命令**：`D:\AI_python\reverse\aidbg\aidbg.exe --mcp`（stdio，13 工具：`aidbg_session` /
+  `aidbg_execute` / `aidbg_breakpoint` / `aidbg_registers` / `aidbg_memory` / `aidbg_disasm` /
+  `aidbg_stack` / `aidbg_cfg` / `aidbg_modules` / `aidbg_eval` / `aidbg_exceptions` /
+  `aidbg_snapshot` / `aidbg_command`）。
+- **运行时重建**（单文件，**不要本地构建** —— 本机没有 MSVC / CMake，上游 `build.bat` 跑不通）：
+  ```powershell
+  $dir = 'D:\AI_python\reverse\aidbg'
+  New-Item -ItemType Directory -Force -Path $dir | Out-Null
+  Invoke-WebRequest 'https://github.com/A-new/aidbg/releases/latest/download/aidbg.exe' `
+    -OutFile (Join-Path $dir 'aidbg.exe') -TimeoutSec 180
+  & (Join-Path $dir 'aidbg.exe') --version    # 期望 aidbg <版本>；本机那份 v0.4.0、SHA256 FCD5A086…D28A6E
+  ```
+  完整配方（版本 / 大小 / 校验和、升级步骤、已知坑）在 `skills\aidbg\references\local-environment.md`。
+- **验证**：① `aidbg.exe --version`；② 冒烟
+  `& $exe --json -c "file C:\Windows\System32\whoami.exe" -c run -c modules -c kill`
+  （期望 `state:paused`、`stop_reason:entry`、退出码 0）；③ 手工 MCP 握手（配方 §4）期望
+  `tools/list` 返回 **13** 个工具；④ 新开「逆向模式」会话出现 `mcp__aidbg__*`。
+- **配套 skill**：`skills\aidbg\`（`SKILL.md` + `references\commands.md` +
+  `references\local-environment.md`，共 3 文件约 21 KB）。它同时把 `reverse-skill-router` 的
+  windows 域从 `shallow` 升到 `deep`（主技能 = `aidbg`），并在能力扫描器的工具表里加了
+  `aidbg`（`k=binary`，`--version` 探活）。
+- **不迁移 / 不备份**：exe 本体（1.7 MB，release 一条命令可重取）；上游仓库不 clone（编译不了）；
+  调试产物（dump 的 PE、补丁副本、`notes save` 的 json）属案件产物，落
+  `D:\AI_python\reverse-cases\<case-id>\output\`，不进 skill 目录。
 
 ### context-mode MCP（**已卸载，新环境不要安装**）
 
