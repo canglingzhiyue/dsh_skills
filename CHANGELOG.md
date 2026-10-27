@@ -14,6 +14,32 @@
 
 ---
 
+## 2026-10-27 —— install: `dsh-skillhub`（技能与 MCP 统一开关面板）+ 本机 schemastery 适配
+
+- **变更类型**：install（用户要求「根据当前环境适配这个仓库 https://github.com/aa2246740/dsh-skillhub」）
+- **装了什么**：DSH 插件 `@aa2246740/dsh-skillhub@1.0.7`（本机 DSH `0.2.0-rc.2`）。
+  设置页新增 `skill&mcp`（全局层），对话输入框上方新增「技能」胶囊（本项目 / 本对话层）；
+  可开关 `~/.agents/skills`（54）+ `$DSH_HOME/skills`（11）与本机 MCP 服务，**纯可见性、不动磁盘文件**。
+- **装法**：`dsh plugin --profile web add @aa2246740/dsh-skillhub`，`bundles` 末尾自动 reconcile；
+  npm 包自带 `lib/`，**无需** `allowBuilds` / pnpm 构建 / DSHX。
+- **踩到并修掉一个真问题（本机适配的核心）**：装完 `--dump-config` 通过，但**另起临时实例实跑**
+  报 `dsh: warning: 1 entry did not activate` + `dsh-skillhub …: failed to import`。根因是
+  `@howmp/dsh-pentest` 的依赖把 `@deepseek-ai/schemastery@3.18.1` 落在 profile 顶层（hoisted），
+  而插件用到 **3.18.4+ 的 `Schema.volatile()`** → import 期抛
+  `z.boolean(...).default(...).volatile is not a function`。修法：`profiles\web\package.json` 的
+  `dependencies` 显式加 `"@deepseek-ai/schemastery": "3.18.5"`（与 host 同版本）+ `dsh plugin --profile web install`；
+  实测 `dsh-pentest` 被一并抬到 3.18.5 后仍正常加载。
+- **实测结论**：`/skillhub/catalog` 200（两个技能根、`collisions: 0`、`broken: 10` 属上游既有
+  frontmatter 问题）；`/skillhub/mcp/catalog` 200 且 `servers: []`（**本机正常**：6 个 MCP 由
+  `reverse-mcp-activator` 在逆向模式会话创建时才挂载）；首页 client 组合 bundle 取回 200 / 977 KB。
+- **影响文件**：新增 `plugins\dsh-skillhub\RECIPE.md`；`SKILLS.md`（表格 + 安装顺序补记 + 日志）；
+  `INSTALL.md`（新增一节）；`config\profile\package.json`（重新同步，含 schemastery 那行）；
+  `CHANGELOG.md`（本条）。`skills\` 无变化（本插件不提供 skill）。
+- **生效**：**必须重启 DSH**（bundle 层在 profile 启动时组合）。本次交付时未重启 3080 那个 host，
+  设置页要重启后才有入口；会话记录不丢。
+
+---
+
 ## 2026-10-27 —— upgrade: reverse-skill 上游 pin 升级（`7e2097f` → `cab634b`，39 个 commit）+ 兼容性适配
 
 - **变更类型**：upgrade（用户要求「检查逆向模式上游仓库是否更新了新版本，如果有新版本直接根据当前环境做

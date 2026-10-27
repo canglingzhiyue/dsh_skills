@@ -9,12 +9,15 @@
         "dsh-think-zh",
         "@liustack/modsearch",
         "dsh-ding",
-        "@howmp/dsh-pentest"
+        "@howmp/dsh-pentest",
+        "@aa2246740/dsh-skillhub"
       ],
       "patchReload": "live"
     }
   },
   "dependencies": {
+    "@aa2246740/dsh-skillhub": "1.0.7",
+    "@deepseek-ai/schemastery": "3.18.5",
     "@howmp/dsh-pentest": "https://github.com/howmp/dsh-pentest/releases/latest/download/dsh-pentest.tar.gz",
     "@liustack/modsearch": "5.10.3",
     "dsh-ding": "github:CAOGGL/dsh-ding",
