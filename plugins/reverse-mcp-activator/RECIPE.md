@@ -78,8 +78,11 @@ Copy-Item "D:\AI_python\skills_backup\plugins\reverse-mcp-activator\*" `
 
 - **换机器要改**：`name` 里的绝对路径，以及每个 server 的 `command` / `args` 绝对路径。
 - `servers` 的每一项就是标准 `@deepseek-ai/dsh-mcp-client` 的 config（原来写在
-  preset composition 里的那 5 段，2026-10-09 原样迁过来）。
+  preset composition 里的那 5 段，2026-10-09 原样迁过来；**2026-10-26 追加第 6 段 `aidbg`**，
+  Windows x86/x64 调试器，单文件 exe `D:\AI_python\reverse\aidbg\aidbg.exe --mcp`，13 工具）。
+  **权威副本是 `config\cordis.patch.yml`**，本文件只列骨架 —— 增删 MCP 请改那份。
 - `startupTimeoutMs`：会话创建最多等这么久（等齐快的几台；慢的转后台）。默认 5000。
+  ⚠ aidbg 是原生 exe，握手在 1 秒内完成，不会成为等待瓶颈。
 
 ### 3. 重启 DSH 并验证
 
@@ -91,12 +94,14 @@ Copy-Item "D:\AI_python\skills_backup\plugins\reverse-mcp-activator\*" `
 3. 新开一个「逆向模式」会话 → 启动日志出现各 MCP 的启动特征
    （`[wireshark-mcp-lite] tshark:`、`JADX-AI-MCP` 的 banner 等），会话里出现
    `mcp__camoufox__*` / `mcp__jadx__*` / `mcp__ida__*` / `mcp__analyzer__*` /
-   `mcp__wireshark__*`。
+   `mcp__wireshark__*` / `mcp__aidbg__*`（aidbg 13 工具，用 `aidbg_session` 起会话探活）。
 
 ## 前置与依赖
 
 - 各 MCP 服务器自己的运行时（camoufox 环境、jadx-mcp-server、IDA + idalib、
-  Anything Analyzer GUI、wireshark-mcp-lite 的 `.venv`）—— 见 `INSTALL.md` 的「MCP」一节。
+  Anything Analyzer GUI、wireshark-mcp-lite 的 `.venv`、aidbg 的单文件 exe）——
+  见 `INSTALL.md` 的「MCP」一节。aidbg 没有需要重建的运行时目录，一条
+  `Invoke-WebRequest` 下 release 即可（配方在 `skills\aidbg\references\local-environment.md`）。
 - 本插件自身只依赖 `@deepseek-ai/dsh-mcp-client`，用 `createRequire` 以 profile 目录为
   解析根载入（插件在 `$DSH_HOME\plugins\` 下解析不到 DSH 的包）。
 
