@@ -1,5 +1,24 @@
 # Global DSH rules (user-global instructions, loaded in every session)
 
+## 核心规则 — 数据边界：第三方模型不得读取 / 上传工作区外的数据
+
+**优先级最高的一条红线，覆盖一切"顺手多读一点上下文"的默认行为。**
+
+- **默认边界 = 当前会话工作区**（`pwd`，本机多为 `D:\AI_python\<项目>`）。使用**任何第三方模型 / 外部服务**时——
+  subagent 指定外部 `provider` / `model`、OpenRouter 等聚合网关、MCP server、AutoGLM / web search / web fetch、
+  抓包工具、以及任何会把本地内容发到本机之外的调用——**只允许**输入当前工作区目录内的数据。
+- **工作区之外的目录，未经我显式允许，一律禁止"扫描 + 读取 + 上传"**：包括同盘其他项目
+  （`D:\AI_python\` 下别的目录）、用户目录（`C:\Users\y\`，含 `.ssh` / `.dsh` / `AppData` / 桌面 / 文档）、
+  `D:\` 其他路径、网络与共享盘、系统目录。禁止用 `..` 上跳、绝对路径、符号链接、`glob **` 递归等方式绕过这条边界。
+- **授权必须逐次、逐目录、明示**：一句"允许读 `D:\x\y`"只覆盖那一次、那一个目录；
+  不得推断成"以后都行"，不得扩展到其父目录 / 子目录或同项目的其他目录。
+  动手前先讲清**要读哪个目录、为什么读、发给哪个模型或服务**，得到同意后再读。
+- **越界即停**：发现任务需要工作区外的数据，先停下来问我，不要"先读了再说"；
+  也不要把路径名、文件名、内容摘要当成"没关系的碎片"发出去。
+- **本机维护类的纯本地操作不属于"上传"**，按各自规则执行、不受此条阻断：`$DSH_HOME` 下 skill / 预设读写、
+  `D:\AI_python\skills_backup` 账本同步、`dev-hygiene` 回收站脚本、`uv` 缓存清理。
+  但**这些目录的原文同样不得作为上下文发给第三方模型**；确需参考时只给最小必要的结构化摘要。
+
 ## Skill inventory — for skills, DSH plugins, MCP mounts and agent presets that are not DSH-bundled
 
 账本目录：`D:\AI_python\skills_backup` —— **它同时是一个私有 git 仓库**，
