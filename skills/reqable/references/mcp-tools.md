@@ -50,7 +50,7 @@
 
 ## 3. 规则类子族的统一骨架（7 个族共用一套模式）
 
-> ⚠ **未登录账号时这一整节只是「设计说明」，实际不可写**：2026-11-01 实测，`capture_rewrite_create` / `capture_breakpoint_create` / `capture_network_throttling_create` / `capture_ssl_proxying_create` / `collection_create` / `environment_create` 全部返回
+> ⚠ **这一整节是「高级版功能」的设计说明，免费账号实际不可写**：2026-11-01 实测两种报错——未登录 `requires an account`；登录免费版 `is a premium feature`（`capture_rewrite_create` / `capture_breakpoint_create` / `capture_network_throttling_create` / `capture_ssl_proxying_create` / `capture_script_create` / `collection_create` / `environment_create` 全部命中）
 > `… requires an account, please login to your Reqable account.`
 > **可读可开关、不可创建**：`*_get_config` / `*_list` / `*_lookup` / `*_get_active` / `*_set_enabled` 都正常。详见 SKILL.md 坑 4。
 
@@ -68,21 +68,23 @@ capture_rewrite_create_folder / capture_rewrite_delete_folder / capture_rewrite_
 把 `rewrite` 换成 `breakpoint` / `gateway` / `mirror` / `script` / `reverse_proxy` 就是另外五族。
 **顺序要点**：先 `*_get_config` 看总开关是否已开，再 `*_create`，最后 `*_set_enabled(true)` —— 只建规则不开总开关 = 规则不起作用。
 
-## 3.5 登录前后的能力对照（2026-11-01 实测）
+## 3.5 账号等级 × 能力对照（2026-11-01 实测两阶段）
 
-| 操作 | 未登录（本机当前状态） |
-|---|---|
-| `capture_live_set_enabled` / `status` / `clear` | ✅ |
-| `capture_live_filter` / `get_by_id` / `generate_curl` | ✅ |
-| `proxy_set` | ✅ |
-| 各族 `*_get_config` / `*_list` / `*_lookup` / `*_get_active` | ✅ |
-| 各族 `*_set_enabled`（功能总开关） | ✅（实测 `rewrite_set_enabled` 可用） |
-| `script_framework` / `script_template` | ✅ |
-| 各族 `*_create` 与 `*_update` / `*_delete` | ❌ 需登录账号 |
-| `capture_live_compose` / `capture_live_collection_add` | ❌ 需登录账号 |
-| `collection_*` / `environment_*` 的写操作 | ❌ 需登录账号 |
+| 操作 | 未登录 | 已登录·免费版 | 高级版 |
+|---|---|---|---|
+| `capture_live_set_enabled` / `status` / `clear` | ✅ | ✅ | ✅（推断） |
+| `capture_live_filter` / `get_by_id` / `generate_curl` | ✅ | ✅ | ✅（推断） |
+| `proxy_set` | ✅ | ✅ | ✅（推断） |
+| 各族 `*_get_config` / `*_list` / `*_lookup` / `*_get_active` | ✅ | ✅ | ✅（推断） |
+| 各族 `*_set_enabled`（功能总开关） | ✅（实测 `rewrite_set_enabled`） | ✅ | ✅（推断） |
+| `script_framework` / `script_template` | ✅ | ✅ | ✅（推断） |
+| 各族 `*_create` | ❌ `requires an account` | ❌ `is a premium feature` | **未验证**（本机无高级版） |
+| `capture_live_compose` / `capture_live_collection_add` | ❌ `requires an account` | ❌ `is a premium feature` | 未验证 |
+| `collection_*` / `environment_*` 写操作 | ❌ `requires an account` | ❌ `is a premium feature` | 未验证 |
 
-登录是**人在 GUI 里完成的动作**，Agent 不要代为登录、不要索取账号密码；未登录时按「只读 + 开关」规划工作流，并把写规则的需求交给 mitmdump 或人工。
+**读法**：报错文案就是账号状态的探针 —— 看到 `requires an account` 说明没登录；看到 `is a premium feature` 说明登录了但等级不够。两种都写进给人看的结论里，不要含糊成「工具不支持」。
+
+登录与升级都是**人在 GUI 里完成的动作**，Agent 不代劳、不索取账号密码。免费账号请按「抓 + 筛 + 读 + 出 cURL + 开关」规划；要写规则的需求交给高级版用户或 `mitmdump`。
 
 ## 4. 关键入参结构
 

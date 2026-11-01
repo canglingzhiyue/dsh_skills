@@ -59,7 +59,7 @@ Reqable 是 MITM：**客户端必须信任 Reqable 根证书**，否则只能看
 
 ## 6. 改行为：断点 / 重写 / 脚本 / 限速
 
-> ⚠ **本节全部是「需要登录 Reqable 账号」的能力**。2026-11-01 未登录实测：`capture_breakpoint_create` / `capture_rewrite_create` / `capture_network_throttling_create` / `capture_ssl_proxying_create` 都返回 `… requires an account, please login to your Reqable account.`
+> ⚠ **本节全部是高级版（premium）能力**。2026-11-01 实测：未登录 → `requires an account`；登录免费版 → `is a premium feature, please upgrade`（`capture_breakpoint_create` / `capture_rewrite_create` / `capture_network_throttling_create` / `capture_ssl_proxying_create` / `capture_script_create` 均命中）
 > 未登录时可行的替代：① 让用户自己登录后重试；② 改用 `mitmdump` 写脚本改包；③ 只做「读 + 出 cURL」把改包交给下游工具。
 
 | 需求 | 用哪个 | 最短做法 |

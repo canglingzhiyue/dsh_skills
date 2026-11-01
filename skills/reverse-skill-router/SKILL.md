@@ -200,7 +200,7 @@ composition 的 MCP 行会随 `dsh web` 一起拉起（正是要避免的），�
 | Android **动态执行**：在真机/模拟器上驱动 UI 跑流程、补丁后的功能回归、必须让 App 自己跑起来才能观察的行为（网络、风控、崩溃复现） | `firerpa` —— Android 域的**动态执行臂**，属逆向流程的一部分。脚本必须落纯 ASCII 路径，先 `adb -s <serial> forward` 再 `--host localhost`，adb 用 `D:\ProgramsDev\adb\adb.exe` |
 | 抓包 / 协议还原：手机 App、桌面应用、CLI、Python 脚本、IoT 的流量，且要 Agent 直接读会话 | `anything-analyzer` —— `protocol` 域主技能；也是 web / android 域的**流量臂**。MITM 只读，要改包用 `mitmdump` |
 | 抓包 + 筛 + 读 + 出可重放 cURL、开关抓包与系统代理、要 GUI 里人工复核 | `reqable` —— 内置 MCP（stdio，`mcp__reqable__*`，`--scope all` 146 工具，本地 API 走 `proxyPort` 9000）。前置：Reqable GUI 在跑 + 令牌经 `skills\reqable\scripts\reqable-mcp-launch.cmd` 取；探活 `skills\reqable\scripts\probe-mcp.ps1`。别和 anything-analyzer 同时接管系统代理 |
-| 要**改**流量（重写 / 断点 / Python 脚本 / 限速 / 镜像） | **未登录 Reqable 账号时做不到**：所有 `*_create` 返回 `requires an account`。可行路径：① 人在 GUI 登录后重试；② `mitmdump` 写脚本改包 |
+| 要**改**流量（重写 / 断点 / Python 脚本 / 限速 / 镜像） | **免费账号做不到**：所有 `*_create` 是高级版功能（未登录 `requires an account`、登录免费版 `is a premium feature`）。可行路径：① 用户升高级版后重试；② `mitmdump` 写脚本改包 |
 | 完整渗透测试、内网、漏洞利用、CTF | `pentest` 模式（`@howmp/dsh-pentest`），不是本模式 |
 | 删除、清理、脚本编码、环境重建 | `dev-hygiene` |
 | 记录新装 / 改动的技能、插件、MCP、preset | `skills-inventory` |

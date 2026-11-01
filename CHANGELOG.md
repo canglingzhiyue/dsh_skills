@@ -14,6 +14,33 @@
 
 ---
 
+## 2026-11-01 reqable 边界再修正：创建类是「登录 + 高级版」双门槛（免费版登录后仍被拒）
+
+**变更类型**：事实修正（第二次，上一条只写到「需要登录」）
+
+**怎么发现的**：用户登录 Reqable 账号后重试，报错文案变了 —— 从 `requires an account` 变成 `is a premium feature`。说明登录只是第一道门，第二道是付费等级。
+
+**实测（已登录·免费版，2026-11-01）**：
+
+| 调用 | 报错 |
+|---|---|
+| `capture_rewrite_create` | `Creating rewrite is a premium feature, please upgrade to premium to use this feature.` |
+| `capture_breakpoint_create` | 同上（breakpoint） |
+| `capture_network_throttling_create` | 同上 |
+| `capture_ssl_proxying_create` | 同上 |
+| `capture_script_create` | 同上 |
+| `collection_create` | 同上（collections） |
+| `environment_create` | 同上（environments） |
+| `capture_live_compose` | 同上（composing live records） |
+| `capture_ssl_proxying_get_config` / `capture_rewrite_list` | ✅ 正常返回（只读不受影响） |
+
+**结论**：`*_create` 类需要**登录 + 高级版**；免费账号（无论是否登录）的能力就是「抓包 + 筛 + 读 + 出 cURL + 开关」。报错文案是账号状态的探针：`requires an account` = 没登录，`is a premium feature` = 登录了但等级不够。
+
+**影响文件**：`skills\reqable\SKILL.md`（frontmatter description、§2 能力边界、§3 验收第 3 条、§4 坑 4 全部改成双门槛口径）、`skills\reqable\references\mcp-tools.md`（§3 顶部警示 + §3.5 改为「账号等级 × 能力」三列对照表，高级版一列标注「未验证」）、`skills\reqable\references\capture-workflows.md`（§6 顶部）、`skills\reqable\references\local-environment.md`（坑 10、重建第 8 步）、`skills\reverse-skill-router\references\domain-registry.json`（supportRoles.reqable）、`skills\reverse-skill-router\SKILL.md`（§9 边界表）、`CHANGELOG.md`（本条）。
+
+**未验证的部分（明确标注）**：高级版下这些 `*_create` 是否可用 —— 本机没有高级版，无法实测，文档里一律写「未验证」，不写成「可用」。
+
+---
 ## 2026-11-01 reqable 能力边界修正：未登录账号时「创建类」全部被拒 —— 技能定位从「可写」改为「只读 + 开关」
 
 **变更类型**：事实修正（实测推翻前一条目的措辞）/ 文档更新
