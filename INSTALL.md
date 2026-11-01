@@ -1799,3 +1799,39 @@ dsh plugin --profile web remove @aa2246740/dsh-skillhub
   名字带空格大写，或 `debug-pro-1.0.0` / `test-runner-1.0.0` 缺 frontmatter），**早已存在**，与插件无关。
 - **MCP 页签为空**：本机 MCP 不是常驻挂载，见上。
 - `~/.agents/skills` 下的软链接包（`ego-browser` 等）会被识别为 `symlink`，可正常开关。
+
+---
+
+## nixiang-shu / nixiang-zhengliu / nixiang-caiji（2026-11-01，P1/P2/P2）
+
+三个本地自制技能，**无上游、无构建步骤**，恢复方式就是把 `skills\<name>\` 整个复制回 `$DSH_HOME\skills\`。
+
+```powershell
+$SH = "$env:USERPROFILE\.dsh\skills"
+foreach ($n in @('nixiang-shu','nixiang-zhengliu','nixiang-caiji')) {
+    Copy-Item "D:\AI_python\skills_backup\skills\$n" -Destination "$SH\$n" -Recurse -Force
+}
+```
+
+**恢复后必做的三件验证**（缺一步不算恢复成功）：
+
+1. **技能被识别**：新开一个会话，`/` 列表里应出现三个名字（`nixiang-shu` / `nixiang-zhengliu` / `nixiang-caiji`）。
+   技能名受 DSH 硬约束 `^[a-z0-9]+(-[a-z0-9]+)*$`，中文名会被**静默忽略**。
+2. **预算与链接闸门**（在 `nixiang-zhengliu\scripts\` 下跑）：
+   ```powershell
+   $env:UV_CACHE_DIR="$env:TEMP\nz-cache"; $env:PYTHONIOENCODING='utf-8'
+   uv run --no-project python check_budget.py "$SH\nixiang-shu"   # 必须 OK 全部通过
+   uv run --no-project python check_links.py  "$SH\nixiang-shu"   # 必须 0 悬空引用
+   ```
+3. **路由悬空检查**：
+   ```powershell
+   pwsh -NoProfile -File "$SH\reverse-skill-router\scripts\scan-capabilities.ps1" -SkipDevice
+   ```
+   ⚠ **必须加 `-SkipDevice`**：不加时它用 `adb devices` 拉起常驻 adb server，实测卡死 600s+。
+   ⚠ 不要给它接管道（`| Select` / `| Tee` 都会卡），一律 `*> $env:TEMP\scan.log` 再读。
+
+**依赖**：`nixiang-shu` 的锚点回查依赖两个语料库在 `D:\AI_python\reverse\{52pojie,kanxue}`；
+换机器后若语料库不在原位，锚点会退化为 `tid + URL`（用 `锚点\<主题>.tsv` 的 URL 列回原帖），**不影响技能可用**。
+
+**nixiang-zhengliu 换语料库**：改 `scripts\common.py` 顶部的 `LIB_52PJ` / `LIB_KX` / `CASE_ROOT` 三个常量即可，其余不用动。
+

@@ -14,6 +14,35 @@
 
 ---
 
+## 2026-11-01 新增三个本地自制技能：nixiang-shu / nixiang-zhengliu / nixiang-caiji
+
+**这是什么**：把 `D:\AI_python\reverse\52pojie`（4999 篇）与 `D:\AI_python\reverse\kanxue`（1485 篇）
+两个经验笔记库，蒸馏成一套**判断链技能树**，并把「怎么蒸馏」和「怎么采集提炼」各自固化成技能。
+
+**① 产物规模（实测）**：`nixiang-shu` 65 文件 / 356 条规则 / 17 主题 ｜ 根 `SKILL.md` 2,338 字符 ｜
+每个主题 ≤12,000 字符 ｜ 症状索引 17 份 942 行（带**权重列** `1/df`，把"同一报错指向多条规则"的二义显式化）｜
+锚点表 17 份 804 行（只存 `平台｜tid｜年份｜难度｜证据上限｜URL`，**不复制案例正文**）。
+
+**② 三闸门（都可重跑）**：`check_budget.py`（根 ≤6k / 单文件 ≤12k / **主题合计** ≤12k / 索引单份 ≤8k、合计 ≤200k / 单次加载 ≤30k）
+｜`check_links.py`（链接 976 条、锚点 804 行、症状索引 942 行，全 0 坏）｜`run_cases.py`（33 条回归用例，先立基线再冻结）。
+**全部 OK 才落盘**。
+
+**③ 方法论上被实测推翻的两个初始假设**（这是本次最值钱的教训）：
+- 「跨平台经验可以按句子聚簇」——实测去重收益 **0.02%**（35,532 条里只有 7 对近似），
+  跨库字符三元组相似度最高仅 0.02–0.12。**两库的人不会用同一句话讲同一件事**，改为**规则级证据计数**。
+- 「全树 ≤250 KB」这类预算是拍脑袋的 —— 后来改成按 7 主题实测斜率（每主题索引约 10,021 字符）外推 17 主题 ≈ 170k，
+  上限设 200k；且全树体积降级为 INFO（那是仓库成本，不是 AI 成本，AI 成本由「单次加载 ≤30,000 字符」卡住）。
+
+**④ 图片缺口**：笔记正文几乎不含图链（52pojie 4999 篇仅 18 篇），但 `raw/threads/<tid>.json` 的
+`images` + `markdown` 里图链完整（实测 **77,489 张**）→ 不重爬、按需回补；`hard_gap`/`md_empty` 的笔记压到 weak。
+发现 kanxue 的 `images` 字段**大量为空**（采集端缺陷），须回落到 markdown 正则（补出 645 篇）。
+
+**⑤ 注册**：`domain-registry.json` 的 6 个域全部追加 `nixiang-shu` 为 supportingSkills；
+`reverse-skill-router/SKILL.md` §2 新增「跨域查询层」小节；`scan-capabilities.ps1 -SkipDevice` 实测 **0 悬空引用**。
+
+**⑥ 备份构成**：`skills\nixiang-shu\`（65 文件全文）、`skills\nixiang-zhengliu\`（14 文件，含 10 个脚本）、
+`skills\nixiang-caiji\`（1 文件）。三者都是本地自制，**目录镜像即唯一副本**。
+
 ## 2026-10-31 —— fix: reverse-mcp-activator 跳过 subagent，修复「jadx MCP server 一直被重启」
 
 - **变更类型**：fix（用户反馈：dsh 控制台一直在重启 jadx 的 mcp server，MCP 应「用的时候才启动」）
