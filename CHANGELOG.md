@@ -14,6 +14,19 @@
 
 ---
 
+## 2026-10-31 —— fix: reverse-mcp-activator 跳过 subagent，修复「jadx MCP server 一直被重启」
+
+- **变更类型**：fix（用户反馈：dsh 控制台一直在重启 jadx 的 mcp server，MCP 应「用的时候才启动」）
+- **改了什么**：`plugins\reverse-mcp-activator\index.mjs` 在 `agent/created` 处理器里按
+  `delegationDepth` 过滤：只对根会话 agent（depth = 0）挂载 MCP，跳过 subagent / fork / 续轮
+  新建的 agent（depth ≥ 1）。
+- **原因**：DSH 的 subagent 通过 `composeFrom(parent.ctx)` 继承父 preset，`composedPreset`
+  同样等于 `reverse`；原实现没过滤 depth，导致每个短命的 subagent 都 spawn 一整套 6 个 MCP
+  （含 jadx），随其 scope 下沉又整组退出、下一个又拉起 —— 即控制台反复重启 jadx 的现象。
+- **影响文件**：`plugins\reverse-mcp-activator\index.mjs`（实况 + 账本同步）、
+  `plugins\reverse-mcp-activator\RECIPE.md`、`CHANGELOG.md`。
+- **生效方式**：重启 `dsh web`（插件启动时加载）。
+
 ## 2026-10-27 —— rule: 修正上一条数据边界 —— 工作区内所有子目录允许遍历，边界只认「工作区根」
 
 - **变更类型**：rule 修正（用户澄清：「不包括当前目录中的子目录，工作目录下面有可能有很多子文件夹，这个是允许的；

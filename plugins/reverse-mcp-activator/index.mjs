@@ -95,6 +95,13 @@ export default function reverseMcpActivator(ctx, config) {
         return
       }
       if (current !== targetPreset) return
+      // 只为根会话 agent（delegation depth = 0）挂载，跳过 subagent / fork / 续轮新建的 agent。
+      // 子 agent 会 composeFrom(parent) 继承 preset 名，composedPreset 同样是 reverse，但它们
+      // 继承的是静态 composition、拿不到本插件动态注册在根 agent scope 上的 MCP 工具，也无需
+      // 各自再 spawn 一整组服务器进程——每个 subagent 都拉起一整套（含 jadx）、随其 scope 下沉
+      // 又整组退出、下一个再拉起，这正是「控制台一直重启 jadx mcp server」的来源。
+      const depth = Math.max(agent.session?.header?.delegationDepth ?? 0, agent.options?.subagentDepth ?? 0)
+      if (depth > 0) return
       if (bound.has(agent)) return
       bound.add(agent)
 

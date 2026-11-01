@@ -37,10 +37,15 @@ AgentPresetRegistry.register() → activate() → mountPreset()   // 启动期�
    AgentLoop holds queued input until all listeners finish」），所以逆向会话的
   第一条消息就带得上工具，不需要用户"等一会再发"。
 2. 用 registry 的 `agentPresets.composedPreset(agent.ctx)` 认出目标 preset；
-3. 对 `agent.ctx` 调 `ctx.plugin(McpClient, server)`。`ToolRuntime.register()` 按
+3. **只对根会话 agent（delegation depth = 0）挂载**：子 agent 通过
+   `composeFrom(parent.ctx)` 继承 preset 名，`composedPreset` 同样等于 `reverse`，但每个
+   subagent 都各自 spawn 一整套服务器进程（含 jadx）、随其 scope 下沉又整组退出——这正是
+   「控制台一直重启 jadx mcp server」的来源。2026-10-31 起按 `delegationDepth` 跳过
+   subagent / fork / 续轮新建的 agent，只在根会话挂载一次。
+4. 对 `agent.ctx` 调 `ctx.plugin(McpClient, server)`。`ToolRuntime.register()` 按
    **调用方 ctx 的 scope** 落层，所以工具只进这个会话的 scope 层 —— 普通会话看不到
    `mcp__*`（实测全局视图里 0 个），也不会互相污染。
-4. 并发挂载 + `startupTimeoutMs` 超时放行：慢的服务器（camoufox 冷启动、IDA 的 uvx
+5. 并发挂载 + `startupTimeoutMs` 超时放行：慢的服务器（camoufox 冷启动、IDA 的 uvx
    解析）不阻塞会话创建，留在后台继续；每个服务器都配 `failOnStartupError: false`，
    连不上只是静默少工具。
 
@@ -119,3 +124,10 @@ Copy-Item "D:\AI_python\skills_backup\plugins\reverse-mcp-activator\*" `
    profile 文件、只 junction `node_modules`，要么别 junction 目录本身。
 4. **验证要区分"启动不带 MCP"和"逆向会话带 MCP"两个方向**：只测后者会漏掉回归，
    只测前者会漏掉功能失效。
+5. **`agent/created` 对 subagent 也会触发，且子 agent 继承 preset**（2026-10-31）：
+   subagent / fork 通过 `composeFrom(parent.ctx)` 加入父 preset 的 composition，所以
+   `composedPreset` 同样是 `reverse`。不为 delegation depth 过滤时，每个 subagent 都会
+   spawn 一整套 MCP（含 jadx），子 agent 短命 → 进程随 scope 下沉退出 → 下一个又拉起，
+   表现为「控制台一直在重启 jadx mcp server」。过滤依据：
+   `Math.max(agent.session.header.delegationDepth ?? 0, agent.options.subagentDepth ?? 0)`，
+   根 agent 为 0、任何子 agent ≥ 1。
