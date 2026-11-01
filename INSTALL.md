@@ -1866,18 +1866,19 @@ Copy-Item "D:\AI_python\skills_backup\skills\reqable" -Destination "$env:USERPRO
    ```yaml
              - serverName: reqable
                transport: stdio
-               command: 'D:\ProgramsDev\reqable\mcp-server.exe'
+               command: 'C:\Windows\System32\cmd.exe'
                args:
+                 - '/c'
+                 - 'C:\Users\y\.dsh\skills\reqable\scripts\reqable-mcp-launch.cmd'
                  - '--scope'
                  - 'all'
-               env:
-                 REQABLE_TOKEN: !!js "process.env.REQABLE_TOKEN || ''"
                toolCallTimeoutMs: 60000
                failOnStartupError: false
    ```
 
    ⚠ **`--scope all` 不是可选项**：`minimal`（48 工具）缺断点/重写/脚本/网关/镜像/网络限速/反向代理/二级代理/访问控制整族，做逆向必须 `all`（146 工具）。
-   ⚠ 令牌一律经 `!!js` 从环境读，**不要**把令牌字面量写进这个文件 —— 它会被镜像回本仓库。
+   ⚠ **必须经 `reqable-mcp-launch.cmd` 中转，不要直接 exec `mcp-server.exe`**：Windows 只把**新设**的用户级环境变量传给**之后**启动的进程，而从旧终端重启的 `dsh web` 继承的是旧环境块 —— 直接 exec 会让 MCP 以空令牌启动，表现为「146 个工具都在、每次调用都 401 `Missing or invalid access token.`」（2026-11-01 实测踩过）。
+   launcher 的取令牌顺序是「已继承的进程环境 → 否则读 `HKCU\Environment`」，令牌**只存在于内存和注册表，不落任何文件**，所以本仓库与 skill 目录都不含令牌值。换机只需改 launcher 里的 `mcp-server.exe` 路径。
 
 **验证（三步，缺一步不算装好）**：
 

@@ -14,6 +14,21 @@
 
 ---
 
+## 2026-11-01 修复 reqable MCP 令牌传递：改用注册表兜底的 launcher（`!!js` 取进程环境不可靠）
+
+**变更类型**：修复挂载方式 / 新增 launcher 脚本 / 文档与账本同步
+
+**现象**：用户重启 `dsh web` 后，`mcp__reqable__*` 工具全部出现（146 个），但每次调用都返回 `Error: Missing or invalid access token.`
+
+**取证（实测，不是推断）**：`[Environment]::GetEnvironmentVariable('REQABLE_TOKEN','User')` = 66 字符 ✓；持有 3080 端口的 DSH 服务进程（`node`，PID 17564）启动于 **16:49:59**，而变量 **16:44** 就已写入用户注册表 ✓；但由 DSH 派生的子进程里 `$env:REQABLE_TOKEN` = **MISSING**。→ 结论：**Windows 只把新设的用户级变量传给之后启动的进程**，从旧终端重启 `dsh web` 继承的仍是旧环境块。此前 `env: REQABLE_TOKEN: !!js "process.env.REQABLE_TOKEN || ''"` 取到的就是空串，于是 mcp-server 以空令牌启动。**这不是配置写错，是"重启 DSH 就能继承环境变量"这个假设错了。**
+
+**修法**：新增 `skills\reqable\scripts\reqable-mcp-launch.cmd`，挂载改为 `cmd.exe /c <launcher> --scope all`。launcher 先在启动瞬间用**已继承的**变量，没有就 `reg query HKCU\Environment /v REQABLE_TOKEN` 现取 —— 令牌只存在于内存与注册表，**不落任何文件**，仓库与 skill 目录依然零凭据。实测在**完全空环境**下启动：`INIT OK: reqable-mcp v1.0.1` + `tools/call capture_live_status` 成功。
+
+**影响文件**：`skills\reqable\scripts\reqable-mcp-launch.cmd`（新增）、`skills\reqable\SKILL.md`（坑 3 重写）、`skills\reqable\references\local-environment.md`（§2 新增「环境继承陷阱」、§5 挂载片段、§6 坑 9、§7 重建配方）、`config\cordis.patch.yml`（挂载方式）、`INSTALL.md`（该节第 4 步）、`CHANGELOG.md`（本条）。
+
+**仍然成立的前提**：Reqable GUI 必须在运行；`--scope all` 不能退成 `minimal`；`failOnStartupError: false` 意味着前置缺失时静默少工具 → 用前跑 `scripts\probe-mcp.ps1`。
+
+---
 ## 2026-11-01 新增 `reqable` 技能（P1 依赖类）+ 第 7 个按需 MCP（Reqable 内置 MCP 服务器）
 
 **变更类型**：新增 skill / 新增 MCP 挂载 / 路由（domain-registry）与能力扫描器更新

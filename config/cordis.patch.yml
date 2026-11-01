@@ -606,21 +606,24 @@
           # **stdio**：不是 HTTP，别按 URL 挂。--scope all = 146 工具 / minimal = 48
           # （minimal 缺断点、重写、脚本、网关、镜像、限速等整族，逆向必须 all）。
           # 前置：① Reqable GUI 必须在跑（MCP 只是遥控器，GUI 不在则每次 tools/call 失败）；
-          #       ② 访问令牌在**用户级环境变量 REQABLE_TOKEN**，API 强制校验，
+          #       ② 访问令牌在用户级环境变量 REQABLE_TOKEN，API 强制校验，
           #          无/错令牌一律 401 `Missing or invalid access token.`。
-          # 令牌经 !!js 从进程环境注入 —— 本文件会被镜像进账本仓库，**绝不硬编码令牌值**。
-          # ⚠ 用户级环境变量只有 **DSH 重启后**才会被继承；本轮若工具报 401，重启 dsh web，
-          #   或改用等价通道 `$DSH_HOME\skills\reqable\scripts\reqable-api.ps1`（直连本地 API）。
-          # failOnStartupError: false —— Reqable 没开时静默少工具、不拦会话创建；
+          # ★ 为什么经 cmd + 自研 launcher 启动，而不是直接 exec mcp-server.exe：
+          #   Windows 只把**新设**的用户级变量传给**之后**启动的进程；从旧终端重启
+          #   `dsh web` 仍然继承旧环境块（2026-11-01 实测：DSH 16:49:59 重启、
+          #   变量 16:44 已写入用户注册表，但 DSH 进程 env 里就是没有 → MCP 报 401）。
+          #   所以改为 launcher 在启动瞬间取令牌：优先用已继承的值，没有就读
+          #   HKCU\Environment（**令牌不落任何文件**），实测可在空环境下拿到令牌并
+          #   成功 tools/call。用户改用新终端重启 DSH 后同样照常工作。
           # 用前先探活 `pwsh -NoProfile -File $DSH_HOME\skills\reqable\scripts\probe-mcp.ps1`
           # （期望 INIT_OK + TOOLS_COUNT=146 + CALL_OK）。
           - serverName: reqable
             transport: stdio
-            command: 'D:\ProgramsDev\reqable\mcp-server.exe'
+            command: 'C:\Windows\System32\cmd.exe'
             args:
+              - '/c'
+              - 'C:\Users\y\.dsh\skills\reqable\scripts\reqable-mcp-launch.cmd'
               - '--scope'
               - 'all'
-            env:
-              REQABLE_TOKEN: !!js "process.env.REQABLE_TOKEN || ''"
             toolCallTimeoutMs: 60000
             failOnStartupError: false

@@ -20,7 +20,7 @@ Reqable = 抓包调试 + 接口测试。对本模式真正的价值是：**它�
 | 工具数 | `--scope all` = **146**；`--scope minimal` = **48** |
 | 配置 | `%APPDATA%\Reqable\config\capture_config`（**无扩展名**，旁边是 `capture_config.json_bak`）：`proxyPort` / `autoProxy` / `remoteControl` / `sslProxyingConfig` |
 | 根证书 | `%APPDATA%\Reqable\certificate\reqable-root.crt`（本机已装进 `Cert:\CurrentUser\Root`） |
-| DSH 挂载 | `cordis.patch.yml` 的 `reverse-mcp-activator.config.servers`，工具前缀 **`mcp__reqable__*`** |
+| DSH 挂载 | `cordis.patch.yml` 的 `reverse-mcp-activator.config.servers`，工具前缀 **`mcp__reqable__*`**；经 `scripts\reqable-mcp-launch.cmd` 启动（见坑 3） |
 | 等价通道 | 不带 MCP 也能用：`scripts\reqable-api.ps1` 直连本地 API（见 references\local-environment.md） |
 
 细节与坑：`references\local-environment.md`；工具全表与参数结构：`references\mcp-tools.md`；抓包流程：`references\capture-workflows.md`。
@@ -64,7 +64,10 @@ Reqable = 抓包调试 + 接口测试。对本模式真正的价值是：**它�
 
 1. **`mcp-server.exe --help` 会崩**：`FormatException: Could not find an option named "--help"`（Dart `ArgParser`，没有 help 分支）。想查参数就读 `--host/-h`、`--port/-p`、`--scope/-s` 三项，或者从源码 `github.com/reqable/reqable-mcp-server` 看。
 2. **GUI 不在 = 全挂**。MCP 握手仍会成功（146 工具照列），但**每次 tools/call 都失败**。所以探活要探到「一次真实调用」，`probe-mcp.ps1` 就是这么设计的。
-3. **令牌是硬门槛**：无令牌 / 错令牌一律 `401 Missing or invalid access token.`。令牌只在用户环境变量 `REQABLE_TOKEN` 里，**不要写进 skill、账本、报告或任何会被备份的文件**；换机时在 GUI「工具 → MCP 服务器」重新生成。
+3. **令牌是硬门槛，且「重启 DSH 就继承环境变量」是错的**：无令牌 / 错令牌一律 `401 Missing or invalid access token.`。
+   ★ 2026-11-01 实测踩过的坑：令牌写进用户环境变量后重启 `dsh web`，**仍然 401** —— Windows 只把新变量传给之后启动的进程，而 `dsh web` 是从**旧终端**里重启的，继承的是旧环境块（实测 DSH 进程启动于 16:49:59、变量 16:44 已入注册表，但 DSH 进程的 `process.env` 里就没有）。
+   **修法**：MCP 经 `scripts\reqable-mcp-launch.cmd` 启动 —— 优先用已继承的值，没有就当场读 `HKCU\Environment`（**令牌不落任何文件**）。这样无论 DSH 从新终端还是旧终端重启都能拿到令牌（实测空环境下手动握手 `INIT OK` + `CALL OK`）。
+   **换机/重置令牌**：在 GUI 里重新生成 → 覆盖用户环境变量 → launcher 下次启动自动生效，无需重启 DSH 也能被新会话读到。
 4. **9000 是「代理 + API」同端口**。别把它当纯 REST 端口去远程直连：远程要用 `--host <ip> --port <port>` 由 mcp-server 自己连，且对端 Reqable 也得开着。
 5. **`--scope minimal` 缺一整批能力**：断点 / 重写 / 脚本 / 网关 / 镜像 / 网络限速 / 反向代理 / 二级代理 / 访问控制 / 集合删除类基本都不在 minimal 里（minimal 48 个，all 146 个）。做逆向要 `all`。
 6. **只经代理访问 loopback 的目标实测不进记录**：`proxyLoopback=true` 时请求能通（返回 200），但 `capture_live/filter` 查不到该记录；真实站点（baidu）正常出入库。要抓本机服务，用「应用直连 127.0.0.1:9000」或改用 anything-analyzer。

@@ -20,7 +20,18 @@
 
 - **形态**：用户级环境变量，值是一串长随机字符串（本机 66 字符）。**不要**把值写进任何文件、skill、账本、报告。
 - **强制程度**：实测无令牌 / 错令牌 → `HTTP 401 {"message":"Missing or invalid access token."}`；正确令牌 → 200。
-- **谁读它**：`mcp-server.exe` 启动时从环境继承，用它给每个 API 请求加 `Authorization: Bearer <token>`。
+- **谁读它**：`mcp-server.exe` 用它给每个 API 请求加 `Authorization: Bearer <token>`。读取时机是启动瞬间。
+
+### ★ 环境继承陷阱（2026-11-01 实测，踩过一次）
+
+写进用户级环境变量后**重启 `dsh web` 并不保证生效**：
+
+- 现象：MCP 工具全部出现（146 个），但每次调用都返回 `Error: Missing or invalid access token.`
+- 取证：`[Environment]::GetEnvironmentVariable('REQABLE_TOKEN','User')` = 66 字符 ✓；DSH 服务进程（3080 端口那个 node）启动于 16:49:59，变量 16:44 就写进注册表了 ✓；但在 DSH 派生的任何子进程里读 `$env:REQABLE_TOKEN` → **MISSING**。
+- 根因：Windows 只在**之后新启动**的进程里注入新变量。`dsh web` 是从一个**早于改动**的终端窗口里重启的，那个 shell 的环境块还是旧的，`dsh web` 继承它再传给子进程。
+- 修法：`scripts\reqable-mcp-launch.cmd` 在启动瞬间兜底 —— 先用继承值，没有就 `reg query HKCU\Environment /v REQABLE_TOKEN`。实测在**完全空环境**下启动，握手 `INIT OK` + `tools/call` 成功。
+- 备选（只在你想彻底干净时才用）：在**新开的**终端里重启 `dsh web`，让环境块刷新。
+
 - **怎么设**（本机已设好，换机/重置时执行）：
 
   ```powershell
@@ -67,21 +78,22 @@ MCP 行写在 `C:\Users\y\.dsh\profiles\web\cordis.patch.yml` 的 **`reverse-mcp
 ```yaml
           - serverName: reqable
             transport: stdio
-            command: 'D:\ProgramsDev\reqable\mcp-server.exe'
+            command: 'C:\Windows\System32\cmd.exe'
             args:
+              - '/c'
+              - 'C:\Users\y\.dsh\skills\reqable\scripts\reqable-mcp-launch.cmd'
               - '--scope'
               - 'all'
-            env:
-              REQABLE_TOKEN: !!js "process.env.REQABLE_TOKEN || ''"
             toolCallTimeoutMs: 60000
             failOnStartupError: false
 ```
 
 要点：
 
-- **`!!js` 引用环境变量**，配置里不出现令牌本体 —— 这样 `cordis.patch.yml` 被镜像进账本仓库时不泄密。
+- **为什么经 `cmd.exe /c` + `reqable-mcp-launch.cmd` 中转，而不是直接 exec `mcp-server.exe`**：见 §2 的「环境继承陷阱」—— 直接从 DSH 继承环境会拿到空的 `REQABLE_TOKEN`，表现为工具全在但每次调用 401。launcher 在启动瞬间补上令牌，配置里不需要出现令牌，也不依赖 DSH 的启动环境。
+- launcher 的取令牌顺序：**已继承的进程环境 → 否则读 `HKCU\Environment`**。令牌只存在于内存与注册表，**不落任何文件**（本文件与账本都不含令牌值）。
 - `failOnStartupError: false`：Reqable 没开时静默少工具、不拦会话创建 → **用前必须探活**。
-- 生效条件：**新建逆向模式会话**（activator 在会话创建时挂载）；当前会话不会凭空出现 `mcp__reqable__*`。
+- 生效条件：**新建逆向模式会话**（activator 在会话创建时挂载）；当前会话不会凭空出现 `mcp__reqable__*`。改完 `cordis.patch.yml` 必须重启 `dsh web`。
 - 只想在个别操作里用、不想开会话 → 直接走 §4 的 `reqable-api.ps1`，能力等价（MCP 只是 API 的封装）。
 
 ## 6. 坑（实测，按遇到概率排序）
@@ -101,14 +113,16 @@ MCP 行写在 `C:\Users\y\.dsh\profiles\web\cordis.patch.yml` 的 **`reverse-mcp
 6. **loopback 目标不进记录**：`proxyLoopback=true` 时经代理访问 `127.0.0.1:xxxx` 能拿到 200，但 `capture_live/filter` 查不到该条（实测 2 次）。抓本机服务改用「客户端直连 127.0.0.1:9000」或换 anything-analyzer。
 7. **HTTPS 乱码 = 根证书没被信任**：检查 `Get-ChildItem Cert:\CurrentUser\Root | ? Subject -match Reqable`。本机已有 `CN="Reqable CA (Aug 3, 2025, DEA51A81)"`，所以 `https://www.baidu.com` 可直接明文入库。
 8. **手机端缺三件套**：断点 / 重写 / 脚本在 Android/iOS 上不可用（系统安全策略），必须回桌面端做。
+9. **「重启 DSH 就继承环境变量」是错的**（详见 §2）：必须用 launcher 兜底，或换新终端重启 `dsh web`。判断方法：在会话里跑 `pwsh -Command '$env:REQABLE_TOKEN'`，空字符串就说明 DSH 进程没继承。
 
 ## 7. 从零重建（换机配方）
 
 1. 官网下载安装 Reqable ≥ 3.2.0（MCP 服务器从 3.2.0 起内置；本机 3.3.9）。
 2. 首次启动跟引导**安装并信任根证书**（否则 HTTPS 全是乱码）。
 3. GUI 里生成访问令牌 → 按 §2 写进用户环境变量 `REQABLE_TOKEN`。
-4. 按 §5 在 `cordis.patch.yml` 的 activator `servers` 里加 reqable 行（`!!js` 引用环境变量，别硬编码）。
-5. `pwsh -NoProfile -File scripts\probe-mcp.ps1` → 期望 `INIT_OK` + `TOOLS_COUNT=146`。
-6. 新建逆向模式会话，确认出现 `mcp__reqable__*` 工具。
+4. 把 `scripts\reqable-mcp-launch.cmd` 里的 `mcp-server.exe` 路径改成新机安装路径（换机唯一要改的地方）。
+5. 按 §5 在 `cordis.patch.yml` 的 activator `servers` 里加 reqable 行 —— **命令走 `cmd.exe /c …reqable-mcp-launch.cmd`，不要直接 exec `mcp-server.exe`**（否则环境继承陷阱会以 401 的形式出现）。
+6. `pwsh -NoProfile -File scripts\probe-mcp.ps1` → 期望 `INIT_OK` + `TOOLS_COUNT=146` + `CALL_OK`。
+7. 重启 `dsh web`，新建逆向模式会话，确认出现 `mcp__reqable__*` 且一次 `capture_live_status` 返回而不报 401。
 
 版本对应关系：Reqable < 3.2.0 **没有** MCP 服务器；`mcp-server.exe` 与主程序必须同版本目录（升级 Reqable 会一起更新）。
