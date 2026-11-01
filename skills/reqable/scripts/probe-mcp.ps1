@@ -37,7 +37,7 @@ if (-not $proc) { Bad 'Reqable GUI is not running - start D:\ProgramsDev\reqable
 else { Ok "Reqable GUI running (pid $($proc.Id -join ','))" }
 
 if ($ApiPort -le 0) {
-  $cfg = "$env:APPDATA\Reqable\config\capture_config.json"
+  $cfg = "$env:APPDATA\Reqable\config\capture_config"
   $ApiPort = 9000
   if (Test-Path $cfg) {
     try { $ApiPort = (Get-Content $cfg -Raw | ConvertFrom-Json).proxyPort } catch { }

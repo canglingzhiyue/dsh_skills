@@ -8,7 +8,7 @@
 |---|---|
 | 主程序 | `D:\ProgramsDev\reqable\Reqable.exe` |
 | MCP 服务器 | `D:\ProgramsDev\reqable\mcp-server.exe`（Dart 编译的单文件，约 6.6 MB） |
-| 配置 | `%APPDATA%\Reqable\config\capture_config.json` |
+| 配置 | `%APPDATA%\Reqable\config\capture_config`（**无扩展名**；同目录另有 `capture_config.json_bak` 备份） |
 | 根证书（文件） | `%APPDATA%\Reqable\certificate\reqable-root.crt` |
 | 私钥/CA 容器 | `%APPDATA%\Reqable\certificate\capture.bin` |
 | 抓包脚本目录 | `%APPDATA%\Reqable\scripts`（本机为空） |
@@ -36,7 +36,7 @@
 | **9000**（= 配置里的 `proxyPort`） | 主通道。既是 MITM 代理，也直接路由 API（`GET http://127.0.0.1:9000/` → `Hello Reqable!`） |
 | 9016 | 内部 API 端口，同样返回 `Hello Reqable!` 且 API 路由可用（实测）。**不保证跨版本存在**，脚本里以 `proxyPort` 为准 |
 
-`capture_config.json` 关键字段：
+`capture_config` 关键字段（文件名本身没有 `.json`，别按 `.json` 拼路径）：
 
 | 字段 | 本机值 | 含义 |
 |---|---|---|

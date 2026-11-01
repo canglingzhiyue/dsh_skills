@@ -32,6 +32,8 @@
 
 **凭据**：令牌只存在用户级环境变量 `REQABLE_TOKEN`，本仓库与 skill 目录**不含任何令牌值**（提交前已用令牌原文扫过全仓库 md/yml/json/ps1，0 命中）。
 
+**同一任务内的修正**：Reqable 的配置文件叫 `capture_config`，**没有 `.json` 扩展名**（同目录的 `capture_config.json_bak` 才是备份文件）。初版 `SKILL.md` / `references\local-environment.md` 与两个脚本都按 `capture_config.json` 拼路径 —— 脚本里因有 `Test-Path` + 回退 9000 而没报错，属于「静默退化」。已全部改正并重跑 `probe-mcp.ps1`（仍 `TOOLS_COUNT=146` / `CALL_OK`）与 `reqable-api.ps1`（正确解析 `proxyPort`）。
+
 ---
 ## 2026-11-01 新增三个本地自制技能：nixiang-shu / nixiang-zhengliu / nixiang-caiji
 

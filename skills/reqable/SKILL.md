@@ -18,7 +18,7 @@ Reqable = 抓包调试 + 接口测试。对本模式真正的价值是：**它�
 | 鉴权 | 用户环境变量 **`REQABLE_TOKEN`**：缺失或错误 → API 返回 `401 Missing or invalid access token.` |
 | API 端口 | `proxyPort`（本机配置 = **9000**；实测内部端口 9016 同样响应，但以 9000 为准） |
 | 工具数 | `--scope all` = **146**；`--scope minimal` = **48** |
-| 配置目录 | `%APPDATA%\Reqable\config\capture_config.json`（`proxyPort` / `autoProxy` / `remoteControl` / `sslProxyingConfig`） |
+| 配置 | `%APPDATA%\Reqable\config\capture_config`（**无扩展名**，旁边是 `capture_config.json_bak`）：`proxyPort` / `autoProxy` / `remoteControl` / `sslProxyingConfig` |
 | 根证书 | `%APPDATA%\Reqable\certificate\reqable-root.crt`（本机已装进 `Cert:\CurrentUser\Root`） |
 | DSH 挂载 | `cordis.patch.yml` 的 `reverse-mcp-activator.config.servers`，工具前缀 **`mcp__reqable__*`** |
 | 等价通道 | 不带 MCP 也能用：`scripts\reqable-api.ps1` 直连本地 API（见 references\local-environment.md） |

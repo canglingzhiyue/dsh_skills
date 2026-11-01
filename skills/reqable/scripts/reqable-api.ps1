@@ -13,7 +13,7 @@
 #
 # Notes:
 #   - token comes from the user env var REQABLE_TOKEN; never pass it on the command line
-#   - port defaults to proxyPort from %APPDATA%\Reqable\config\capture_config.json (fallback 9000)
+#   - port defaults to proxyPort from %APPDATA%\Reqable\config\capture_config (NO extension; fallback 9000)
 #   - /capture/live/filter and /capture/live/get ONLY accept POST
 param(
   [Parameter(Mandatory = $true)][string]$Path,
@@ -29,7 +29,7 @@ if (-not $tok) { Write-Output 'ERROR: REQABLE_TOKEN not set (user env or process
 
 if ($Port -le 0) {
   $Port = 9000
-  $cfg = "$env:APPDATA\Reqable\config\capture_config.json"
+  $cfg = "$env:APPDATA\Reqable\config\capture_config"
   if (Test-Path $cfg) { try { $Port = (Get-Content $cfg -Raw | ConvertFrom-Json).proxyPort } catch { } }
 }
 
