@@ -1,6 +1,6 @@
 ---
 name: reqable
-description: 本机已装好的 Reqable（Fiddler + Charles + Postman 三合一，v3.3.9）及其内置 MCP 服务器 reqable-mcp（v1.0.1，--scope all 提供 146 个工具）。当需要抓本机 / 手机 App / 桌面程序 / CLI / Python 脚本的 HTTP(S) 流量、筛会话、读单条报文、转 cURL、建断点 / 重写 / 脚本规则、注入异常、做接口 diff，或提到 reqable / Reqable MCP / 9000 代理 / 抓包 / HAR / 协同模式时使用。
+description: 本机已装好的 Reqable（Fiddler + Charles + Postman 三合一，v3.3.9）及其内置 MCP 服务器 reqable-mcp（v1.0.1，--scope all 提供 146 个工具）。当需要抓本机 / 手机 App / 桌面程序 / CLI / Python 脚本的 HTTP(S) 流量、筛会话、读单条报文、转可重放 cURL、开关抓包与系统代理，或提到 reqable / Reqable MCP / 9000 代理 / 抓包 / HAR / 协同模式时使用。注意：断点 / 重写 / 脚本 / 限速等**创建类操作需要登录 Reqable 账号**，未登录时本技能只能读与开关。
 ---
 
 # reqable — Reqable 抓包与内置 MCP 服务器
@@ -42,14 +42,17 @@ Reqable = 抓包调试 + 接口测试。对本模式真正的价值是：**它�
 
 ```
 开抓 → 让目标自己跑（业务操作 / 浏览器 / 脚本） → capture_live_filter(filters) → capture_live_get_by_id(id)
-     → capture_live_generate_curl(id) / capture_live_compose(id) / capture_live_collection_add(id, collectionId)
-     → 需要改行为时：capture_rewrite_create / capture_breakpoint_create / capture_script_create
+     → capture_live_generate_curl(id)                     # 这条不需要账号
+     → capture_live_compose(id) / capture_live_collection_add(...)   # ★ 需要登录账号
+     → 改行为：capture_rewrite_create / capture_breakpoint_create / capture_script_create   # ★ 需要登录账号
 ```
 
 - **筛选**：`capture_live_filter` 只返回 **ID 数组**，要详情必须再 `capture_live_get_by_id`。`filters` 是数组、多项之间 **AND**，每项是 `oneOf` 的七种形状之一（`keyword` / `url` / `host` / `ip` / `method` / `code` / `application`）。形状写错 → `400 filters is required` 或 `400`。完整 schema 见 `references\mcp-tools.md#filter`。
-- **单条详情**里 `application.name` / `application.path` 是**发起进程**（实测能识别出 `pwsh`）——定位「这个请求是哪个客户端发的」比看 UA 可靠。
-- **改行为**：三种规则的分工 —— 断点（暂停给人看）、重写（静态替换）、脚本（Python 动态处理）。**建脚本前必须先调 `script_framework` / `script_template`**，否则 code 是瞎写的。
-- **重放/入库**：`capture_live_generate_curl` 出可复现命令；`capture_live_compose` 转成 API 标签页；`collection_api_create` 走 cURL 入库（**集合功能要登录 + 高级版**，社区版会失败，见坑 5）。
+- **单条详情**里 `application.name` / `application.path` / `application.pid` 是**发起进程**（实测能识别出 `pwsh` 及其 pid）——定位「这个请求是哪个客户端发的」比看 UA 可靠。
+- **★ 能力边界（2026-11-01 实测，未登录状态）**：能读、能开关、**不能写**。
+  - ✅ 可用：`capture_live_status/filter/get/generate_curl/set_enabled/clear`、`proxy_set`、各族 `*_get_config`/`*_list`/`*_lookup`/`*_get_active`、各族 `*_set_enabled`（总开关）、`script_framework`/`script_template`。
+  - ❌ 需登录账号：**所有 `*_create`**（rewrite / breakpoint / network_throttling / ssl_proxying / collection / environment 实测全部返回 `… requires an account, please login to your Reqable account.`）、`capture_live_compose`、`capture_live_collection_add`。
+  - 想在未登录状态下**改流量** → 换 `mitmdump`（可写脚本）或让用户在 GUI 里登录 Reqable 账号后重试（登录是人在 GUI 里做的，Agent 不该代劳）。
 
 ## 3. 验收（本域附加判据）
 
@@ -57,7 +60,7 @@ Reqable = 抓包调试 + 接口测试。对本模式真正的价值是：**它�
 
 1. `capture_live_filter` 返回**非空 ID 数组**，且 `capture_live_get_by_id` 拿到的记录含完整 url / 请求头 / 响应体；
 2. 该记录能用 `capture_live_generate_curl` 生成命令并**重放成功**（同状态码、关键字段一致）；
-3. 建的规则在 `capture_breakpoint_list` / `capture_rewrite_list` / `capture_script_list` 里可见且 `isEnabled=true`，并**直接观察到目标流量被改变**（不是「规则建好了」）；
+3. **只有用户已登录账号时**才要求这一条：建的规则在 `capture_breakpoint_list` / `capture_rewrite_list` / `capture_script_list` 里可见且 `isEnabled=true`，并**直接观察到目标流量被改变**（不是「规则建好了」）。未登录时把「创建被拒」当作**已知边界**记录，不要伪报成功；
 4. 收尾把规则关掉或删掉，不留残留（`*_set_enabled(false)` / `*_delete`）。
 
 ## 4. 已知坑（都踩过或实测过）
@@ -68,11 +71,13 @@ Reqable = 抓包调试 + 接口测试。对本模式真正的价值是：**它�
    ★ 2026-11-01 实测踩过的坑：令牌写进用户环境变量后重启 `dsh web`，**仍然 401** —— Windows 只把新变量传给之后启动的进程，而 `dsh web` 是从**旧终端**里重启的，继承的是旧环境块（实测 DSH 进程启动于 16:49:59、变量 16:44 已入注册表，但 DSH 进程的 `process.env` 里就没有）。
    **修法**：MCP 经 `scripts\reqable-mcp-launch.cmd` 启动 —— 优先用已继承的值，没有就当场读 `HKCU\Environment`（**令牌不落任何文件**）。这样无论 DSH 从新终端还是旧终端重启都能拿到令牌（实测空环境下手动握手 `INIT OK` + `CALL OK`）。
    **换机/重置令牌**：在 GUI 里重新生成 → 覆盖用户环境变量 → launcher 下次启动自动生效，无需重启 DSH 也能被新会话读到。
-4. **9000 是「代理 + API」同端口**。别把它当纯 REST 端口去远程直连：远程要用 `--host <ip> --port <port>` 由 mcp-server 自己连，且对端 Reqable 也得开着。
-5. **`--scope minimal` 缺一整批能力**：断点 / 重写 / 脚本 / 网关 / 镜像 / 网络限速 / 反向代理 / 二级代理 / 访问控制 / 集合删除类基本都不在 minimal 里（minimal 48 个，all 146 个）。做逆向要 `all`。
-6. **只经代理访问 loopback 的目标实测不进记录**：`proxyLoopback=true` 时请求能通（返回 200），但 `capture_live/filter` 查不到该记录；真实站点（baidu）正常出入库。要抓本机服务，用「应用直连 127.0.0.1:9000」或改用 anything-analyzer。
-7. **和 Clash / v2ray 抢代理**：Reqable 接管系统代理时其它代理软件会打架，抓包期间先关掉（官方文档明说）。本机 `autoProxy=false`，即**默认不接管**，要抓浏览器必须显式 `proxy_set(overrideSystem=true)`。
-8. **手机端三件套用不了**：断点 / 重写 / 脚本在 Android/iOS 端因系统限制不可用，只能回桌面端做。
+4. **★ 创建类操作全部需要登录 Reqable 账号（未登录时最容易被误判成「技能不行」）**：2026-11-01 实测，未登录状态下 `capture_rewrite_create` / `capture_breakpoint_create` / `capture_network_throttling_create` / `capture_ssl_proxying_create` / `collection_create` / `environment_create` / `capture_live_compose` 一律返回 `… requires an account, please login to your Reqable account.`。而抓包开关、`proxy_set`、`generate_curl`、各类读取与**总开关**都正常。
+   → 未登录时的正确姿势是「**抓包 + 筛 + 读 + 出 cURL**」；要写规则只有两条路：① 让用户**在 GUI 里自己登录**（然后重试，Agent 不代劳登录）；② 改用 `mitmdump` 等能写脚本的通道。不要把「创建被拒」包装成「已配置」。
+5. **9000 是「代理 + API」同端口**。别把它当纯 REST 端口去远程直连：远程要用 `--host <ip> --port <port>` 由 mcp-server 自己连，且对端 Reqable 也得开着。
+6. **`--scope minimal` 缺一整批能力**：断点 / 重写 / 脚本 / 网关 / 镜像 / 网络限速 / 反向代理 / 二级代理 / 访问控制 / 集合删除类基本都不在 minimal 里（minimal 48 个，all 146 个）。做逆向要 `all`。
+7. **只经代理访问 loopback 的目标实测不进记录**：`proxyLoopback=true` 时请求能通（返回 200），但 `capture_live/filter` 查不到该记录；真实站点（baidu）正常出入库。要抓本机服务，用「应用直连 127.0.0.1:9000」或改用 anything-analyzer。
+8. **和 Clash / v2ray 抢代理**：Reqable 接管系统代理时其它代理软件会打架，抓包期间先关掉（官方文档明说）。本机 `autoProxy=false`，即**默认不接管**，要抓浏览器必须显式 `proxy_set(overrideSystem=true)`。
+9. **手机端三件套用不了**：断点 / 重写 / 脚本在 Android/iOS 端因系统限制不可用，只能回桌面端做。
 
 ## 5. 与其他技能的边界
 

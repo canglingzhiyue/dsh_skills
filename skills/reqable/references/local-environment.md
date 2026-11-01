@@ -114,6 +114,7 @@ MCP 行写在 `C:\Users\y\.dsh\profiles\web\cordis.patch.yml` 的 **`reverse-mcp
 7. **HTTPS 乱码 = 根证书没被信任**：检查 `Get-ChildItem Cert:\CurrentUser\Root | ? Subject -match Reqable`。本机已有 `CN="Reqable CA (Aug 3, 2025, DEA51A81)"`，所以 `https://www.baidu.com` 可直接明文入库。
 8. **手机端缺三件套**：断点 / 重写 / 脚本在 Android/iOS 上不可用（系统安全策略），必须回桌面端做。
 9. **「重启 DSH 就继承环境变量」是错的**（详见 §2）：必须用 launcher 兜底，或换新终端重启 `dsh web`。判断方法：在会话里跑 `pwsh -Command '$env:REQABLE_TOKEN'`，空字符串就说明 DSH 进程没继承。
+10. **未登录账号时不能写**（2026-11-01 实测）：`capture_rewrite_create` / `capture_breakpoint_create` / `capture_network_throttling_create` / `capture_ssl_proxying_create` / `collection_create` / `environment_create` / `capture_live_compose` 全部返回 `… requires an account, please login to your Reqable account.`；而抓包开关、`proxy_set`、`generate_curl`、各类读取与**总开关**都正常。判断当前能否写：直接试一次 `*_create`，看是不是这条报错。要写规则得让人在 GUI 里登录（Agent 不代劳），或改用 `mitmdump`。
 
 ## 7. 从零重建（换机配方）
 
@@ -124,5 +125,6 @@ MCP 行写在 `C:\Users\y\.dsh\profiles\web\cordis.patch.yml` 的 **`reverse-mcp
 5. 按 §5 在 `cordis.patch.yml` 的 activator `servers` 里加 reqable 行 —— **命令走 `cmd.exe /c …reqable-mcp-launch.cmd`，不要直接 exec `mcp-server.exe`**（否则环境继承陷阱会以 401 的形式出现）。
 6. `pwsh -NoProfile -File scripts\probe-mcp.ps1` → 期望 `INIT_OK` + `TOOLS_COUNT=146` + `CALL_OK`。
 7. 重启 `dsh web`，新建逆向模式会话，确认出现 `mcp__reqable__*` 且一次 `capture_live_status` 返回而不报 401。
+8. **账号登录状态决定能不能写规则**（见 §6 坑 10）：不登录也能抓包/筛选/读/出 cURL；要建断点/重写/脚本/限速/集合，必须在 GUI 里登录 Reqable 账号。
 
 版本对应关系：Reqable < 3.2.0 **没有** MCP 服务器；`mcp-server.exe` 与主程序必须同版本目录（升级 Reqable 会一起更新）。

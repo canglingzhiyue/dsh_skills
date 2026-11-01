@@ -35,7 +35,7 @@ description: 逆向模式的路由与治理层（域路由 / 授权登记 / 能�
 | 微信小程序 `miniapp` | deep | `wmpf-miniapp-reverse` | WMPFDebugger Frida 注入 `WeChatAppEx`；CDP 代理 62000；三步顺序敏感：先调试器 → 重开小程序 → 最后 DevTools。不覆盖 `.wxapkg` 离线解包 |
 | Web / 前端 JS `web` | deep | `camoufox-reverse` | camoufox MCP（39 工具）反指纹浏览 + Hook + JSVMP/签名定位；先取证复现，再谈 AST 清洗。**抓包留档/加密速查**可用支撑技能 `anything-analyzer`（但指纹对抗仍归 camoufox） |
 | Android / APK `android` | deep | `apk-reverse` | 权威内核（114 文件）+ **动态执行臂 `firerpa`** + **流量臂 `anything-analyzer`**；本机 jadx MCP + IDA MCP + Magisk 设备。开工前读 `apk-reverse\references\local-environment.md` |
-| 协议 / 非浏览器流量 `protocol` | deep | `anything-analyzer` | Electron GUI + 内置 MCP Server（`127.0.0.1:23816`，30 工具）抓手机 App / 桌面应用 / CLI / 脚本 / IoT 的流量，Agent 经 MCP 直读会话。**GUI 必须运行**，先跑 `scripts\probe-mcp.ps1` 探活。**要改流量**（重写/断点/脚本/限速/镜像）或要 cURL·集合资产 → 用支撑技能 `reqable`（内置 MCP，146 工具，9000 端口，令牌 `REQABLE_TOKEN`）；只读抓包仍用本工具（它的 MITM 只读，改包得另起 mitmdump） |
+| 协议 / 非浏览器流量 `protocol` | deep | `anything-analyzer` | Electron GUI + 内置 MCP Server（`127.0.0.1:23816`，30 工具）抓手机 App / 桌面应用 / CLI / 脚本 / IoT 的流量，Agent 经 MCP 直读会话。**GUI 必须运行**，先跑 `scripts\probe-mcp.ps1` 探活。要在 Reqable GUI 里人工复核、或要 cURL 资产 / 已登录账号后建规则 → 用支撑技能 `reqable`（内置 MCP，146 工具，9000 端口）；纯只读抓包仍用本工具 |
 | iOS `ios` | shallow | — | 本机**无** iOS 主技能与 ipa/otool/class-dump 工具链。降级：参考上游 `skills\mobile-reverse\references\ios-reverse-guide.md`（**未验证**），新结论必须标注「未验证」 |
 | Windows / PE / .NET `windows` | deep | `aidbg` | 本机 AI-first Windows x86/x64 调试器 `D:\AI_python\reverse\aidbg\aidbg.exe`（v0.4.0，单文件）：**JSONL CLI 优先**（`-c` / `--script`），另有 13 工具 MCP（`mcp__aidbg__*`，由 `reverse-mcp-activator` 在**逆向模式会话创建时**挂载）。默认固定基址 → 运行期地址与 IDA 静态地址一致；断点/单步/CFG/PEB-TEB/IAT 追踪与重建/dump 可运行 PE/带原始字节记录的字节补丁/快照回退/hide+detect。**本机仍无 x64dbg / dnSpy / Ghidra / radare2**：静态侧继续用 IDA 9.4 + idalib MCP，.NET 反编译仍无工具 |
 
@@ -199,7 +199,8 @@ composition 的 MCP 行会随 `dsh web` 一起拉起（正是要避免的），�
 | Windows PE 的**动态**分析：调试、断点、单步、dump 脱壳、IAT 重建、字节补丁、反反调试、快照回退 | `aidbg` —— windows 域主技能；`D:\AI_python\reverse\aidbg\aidbg.exe`，CLI（`--json -c` / `--script`）优先，`mcp__aidbg__*` 只在逆向模式会话里 |
 | Android **动态执行**：在真机/模拟器上驱动 UI 跑流程、补丁后的功能回归、必须让 App 自己跑起来才能观察的行为（网络、风控、崩溃复现） | `firerpa` —— Android 域的**动态执行臂**，属逆向流程的一部分。脚本必须落纯 ASCII 路径，先 `adb -s <serial> forward` 再 `--host localhost`，adb 用 `D:\ProgramsDev\adb\adb.exe` |
 | 抓包 / 协议还原：手机 App、桌面应用、CLI、Python 脚本、IoT 的流量，且要 Agent 直接读会话 | `anything-analyzer` —— `protocol` 域主技能；也是 web / android 域的**流量臂**。MITM 只读，要改包用 `mitmdump` |
-| 要**改**流量（重写 / 断点 / Python 脚本规则 / 网络限速 / 镜像 / 反向代理）、要把流量转成 cURL 或接口集合、要 GUI 里人工复核规则 | `reqable` —— **可写抓包臂**，内置 MCP（stdio，`mcp__reqable__*`，`--scope all` 146 工具，本地 API 走 `proxyPort` 9000）。前置：Reqable GUI 在跑 + 用户环境变量 `REQABLE_TOKEN`；探活 `skills\reqable\scripts\probe-mcp.ps1`。别和 anything-analyzer 同时接管系统代理 |
+| 抓包 + 筛 + 读 + 出可重放 cURL、开关抓包与系统代理、要 GUI 里人工复核 | `reqable` —— 内置 MCP（stdio，`mcp__reqable__*`，`--scope all` 146 工具，本地 API 走 `proxyPort` 9000）。前置：Reqable GUI 在跑 + 令牌经 `skills\reqable\scripts\reqable-mcp-launch.cmd` 取；探活 `skills\reqable\scripts\probe-mcp.ps1`。别和 anything-analyzer 同时接管系统代理 |
+| 要**改**流量（重写 / 断点 / Python 脚本 / 限速 / 镜像） | **未登录 Reqable 账号时做不到**：所有 `*_create` 返回 `requires an account`。可行路径：① 人在 GUI 登录后重试；② `mitmdump` 写脚本改包 |
 | 完整渗透测试、内网、漏洞利用、CTF | `pentest` 模式（`@howmp/dsh-pentest`），不是本模式 |
 | 删除、清理、脚本编码、环境重建 | `dev-hygiene` |
 | 记录新装 / 改动的技能、插件、MCP、preset | `skills-inventory` |

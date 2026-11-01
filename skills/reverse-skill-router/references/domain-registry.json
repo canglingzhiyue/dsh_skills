@@ -82,9 +82,9 @@
         "reverse-skill-router",
         "nixiang-shu"
       ],
-      "entryHint": "主技能 anything-analyzer（Electron GUI + 内置 MCP Server）：内嵌浏览器 CDP 抓包 + MITM 代理（0.0.0.0:8888）+ 统一会话，MCP 在 127.0.0.1:23816，工具名 mcp__analyzer__*。GUI 必须运行——MCP 跑在 Electron 主进程里，不开 GUI 就静默失效，先跑 scripts\\probe-mcp.ps1 探活、scripts\\start-analyzer.ps1 启动。覆盖手机 App / 桌面应用 / curl / Python 脚本 / IoT 的流量，Agent 直接读会话。需要「改包」（重写/断点/脚本/限速/镜像）或要 cURL·集合资产时，改用支撑技能 reqable（自带 MCP，146 工具，9000 端口）：它的抓包引擎可写、GUI 常驻、令牌 REQABLE_TOKEN 鉴权。",
+      "entryHint": "主技能 anything-analyzer（Electron GUI + 内置 MCP Server）：内嵌浏览器 CDP 抓包 + MITM 代理（0.0.0.0:8888）+ 统一会话，MCP 在 127.0.0.1:23816，工具名 mcp__analyzer__*。GUI 必须运行——MCP 跑在 Electron 主进程里，不开 GUI 就静默失效，先跑 scripts\\probe-mcp.ps1 探活、scripts\\start-analyzer.ps1 启动。覆盖手机 App / 桌面应用 / curl / Python 脚本 / IoT 的流量，Agent 直接读会话。要在 GUI 里人工复核、或已登录账号要建规则/要 cURL 资产时，用支撑技能 reqable（自带 MCP，146 工具，9000 端口）。",
       "supportRoles": {
-        "reqable": "可写抓包臂：Reqable 内置 MCP 服务器（stdio，reqable-mcp v1.0.1，--scope all=146 工具）经本地 API（proxyPort 默认 9000）遥控 GUI。能开抓包、按 keyword/url/host/ip/method/code/application 筛流量、读单条报文、转 cURL/集合，并建断点、重写（含注入 500/空数组做异常测试）、Python 脚本、网关、镜像、网络限速。**前提：GUI 必须在跑 + 用户环境变量 REQABLE_TOKEN 已设**，否则 MCP 握手成功但每次 tools/call 失败；`--scope minimal` 缺规则类整族。与 anything-analyzer 的分工：只读抓包用 analyzer，要改流量或要资产化用 reqable；两者不要同时接管系统代理。"
+        "reqable": "抓包臂（默认只读 + 开关）：Reqable 内置 MCP 服务器（stdio，reqable-mcp v1.0.1，--scope all=146 工具）经本地 API（proxyPort 默认 9000）遥控 GUI。能开抓包、按 keyword/url/host/ip/method/code/application 筛流量、读单条报文、出可重放 cURL、开关各族功能总开关。**前提：GUI 必须在跑 + 令牌能取到**——2026-11-01 实测「把用户环境变量交给 MCP」不可靠（Windows 不会把新变量补给已在运行的终端，重启 dsh web 仍 401），必须走 skills\\reqable\\scripts\\reqable-mcp-launch.cmd 从 HKCU\\Environment 现取。★ **未登录 Reqable 账号时所有 *_create（断点/重写/脚本/网关/镜像/限速/SSL/集合/环境）与 compose/collection_add 一律被拒**（`requires an account`）——要改流量须由人在 GUI 登录，或改用 mitmdump。与 anything-analyzer 的分工：纯只读抓包选 analyzer（轻、8888），需要 Reqable GUI 里人工复核、或已登录要建规则/要 cURL 资产时用 reqable；两者不要同时接管系统代理。"
       },
       "acceptance": [
         "抓到的请求可被 Agent 经 MCP 直接读取（filter_requests 返回非空且字段完整）",

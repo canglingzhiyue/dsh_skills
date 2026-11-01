@@ -14,6 +14,35 @@
 
 ---
 
+## 2026-11-01 reqable 能力边界修正：未登录账号时「创建类」全部被拒 —— 技能定位从「可写」改为「只读 + 开关」
+
+**变更类型**：事实修正（实测推翻前一条目的措辞）/ 文档更新
+
+**怎么发现的**：本会话第一次真正跑 `mcp__reqable__*`（重启后 401 已修好），抓包 → filter → get → generate_curl 全通，但准备验证「Agent 能直接改流量」时，创建重写规则被拒。
+
+**实测证据（未登录 Reqable 账号，2026-11-01）**：
+
+| 调用 | 结果 |
+|---|---|
+| `capture_rewrite_create` | ❌ `Creating rewrite requires an account, please login to your Reqable account.` |
+| `capture_breakpoint_create` | ❌ 同上（breakpoint） |
+| `capture_network_throttling_create` | ❌ 同上（network throttling profile） |
+| `capture_ssl_proxying_create` | ❌ 同上（SSL proxying profile） |
+| `collection_create` | ❌ 同上（collections） |
+| `environment_create` | ❌ 同上（environments） |
+| `capture_live_compose` | ❌ 同上（composing live records） |
+| `capture_live_set_enabled` / `status` / `filter` / `get_by_id` / `generate_curl` / `clear` | ✅ |
+| `proxy_set` | ✅ |
+| `capture_rewrite_set_enabled`（功能总开关） | ✅ —— **开关可写、创建不可写** |
+| 各族 `*_get_config` / `*_list` / `*_lookup` | ✅ |
+
+**结论**：未登录状态下 Reqable MCP 的能力是「**抓包 + 筛 + 读 + 出 cURL + 开关总开关**」，不是「可写规则」。前一条 CHANGELOG 写的「可写抓包臂 / 能在 GUI 里建断点重写脚本」在**未登录前提**下不成立，已在这条更正。
+
+**影响文件**：`skills\reqable\SKILL.md`（frontmatter description 重写、§2 新增能力边界清单、§3 验收第 3 条加前置、§4 新增坑 4 并顺延编号）、`skills\reqable\references\mcp-tools.md`（§3 顶部警示 + 新增 §3.5 登录前后能力对照表）、`skills\reqable\references\capture-workflows.md`（§6 顶部警示、§7 与 §8 标注需登录）、`skills\reqable\references\local-environment.md`（坑 10、重建配方第 8 步）、`skills\reverse-skill-router\references\domain-registry.json`（supportRoles.reqable 与 protocol entryHint 改口径）、`skills\reverse-skill-router\SKILL.md`（§2 域表、§9 边界表各拆成「可读路径」与「要改流量」两行）、`CHANGELOG.md`（本条）。
+
+**给后续会话的判断依据**：要改流量时先问自己「账号登录了吗」；没登录就不要承诺能建规则，直接在「只读 + cURL + mitmdump」这条线上规划。
+
+---
 ## 2026-11-01 修复 reqable MCP 令牌传递：改用注册表兜底的 launcher（`!!js` 取进程环境不可靠）
 
 **变更类型**：修复挂载方式 / 新增 launcher 脚本 / 文档与账本同步

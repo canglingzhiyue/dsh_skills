@@ -59,6 +59,9 @@ Reqable 是 MITM：**客户端必须信任 Reqable 根证书**，否则只能看
 
 ## 6. 改行为：断点 / 重写 / 脚本 / 限速
 
+> ⚠ **本节全部是「需要登录 Reqable 账号」的能力**。2026-11-01 未登录实测：`capture_breakpoint_create` / `capture_rewrite_create` / `capture_network_throttling_create` / `capture_ssl_proxying_create` 都返回 `… requires an account, please login to your Reqable account.`
+> 未登录时可行的替代：① 让用户自己登录后重试；② 改用 `mitmdump` 写脚本改包；③ 只做「读 + 出 cURL」把改包交给下游工具。
+
 | 需求 | 用哪个 | 最短做法 |
 |---|---|---|
 | 停下来人工看/改一条请求 | 断点 `capture_breakpoint_create` | `url` + `wildcard:true` + `isRequestEnabled`/`isResponseEnabled` |
@@ -70,12 +73,13 @@ Reqable 是 MITM：**客户端必须信任 Reqable 根证书**，否则只能看
 | 把某条请求重放到别的后端 | 反向代理 `capture_reverse_proxy_create` | — |
 
 建完**必须** `*_set_enabled(true)`（总开关）并确认 `*_list` 里 `isEnabled=true`。收尾关掉规则，否则下次抓包还带着上次的注入。
+（总开关本身**不需要**登录 —— 实测 `capture_rewrite_set_enabled` 可用；不能建规则，但能关。）
 
 ## 7. 分析 / 资产化 / 回归
 
-- **转 cURL**：`capture_live_generate_curl(id)` → 直接进重放、CI 冒烟、pytest 骨架。
-- **转 API 标签页**：`capture_live_compose(id)`。
-- **入集合**：`capture_live_collection_add(id, collectionId)` / `collection_api_create(collectionId, curl)`（**集合要登录 + 高级版**）。
+- **转 cURL**：`capture_live_generate_curl(id)` → 直接进重放、CI 冒烟、pytest 骨架。（**不需要登录**，未登录状态下最值钱的能力）
+- **转 API 标签页**：`capture_live_compose(id)`。（❌ 实测需登录账号）
+- **入集合**：`capture_live_collection_add(id, collectionId)` / `collection_api_create(collectionId, curl)`（❌ 需登录账号，且集合功能还要高级版）。
 - **接口 diff / 变更感知**：GUI 里选中两条记录用「对比」；Agent 侧则把两条记录的响应体取出后自己比。两轮抓包（迭代前后）各存一份，比字段增删与类型变化。
 - **HAR 留档**：GUI 支持导入导出 HAR【文档】，适合把一轮流量落成文件进案件库 `data\`。
 
@@ -84,7 +88,7 @@ Reqable 是 MITM：**客户端必须信任 Reqable 根证书**，否则只能看
 | 任务 | 组合 |
 |---|---|
 | 某 App/网页的接口清单 | 本技能抓包 → `capture_live_filter` 按 host/app 筛 → 批量 `capture_live_get_by_id` → 生成 cURL/集合 → 落到案件 `data\` |
-| 定位签名参数来源 | 抓包（本技能或 anything-analyzer）拿完整请求 → Web 域转 `camoufox-reverse` 下 Hook 找生成点 → 回到本技能用**重写规则**改参数验证服务端是否校验 |
+| 定位签名参数来源 | 抓包（本技能或 anything-analyzer）拿完整请求 → Web 域转 `camoufox-reverse` 下 Hook 找生成点 → 回到本技能用**重写规则**改参数验证服务端是否校验（★ 需先登录账号；未登录改用 mitmdump） |
 | 服务端校验强度测试 | 重写 `type=3`（改 userId/orderId）+ 观察响应 → 判断水平越权 |
 | 前端容错回归 | 重写 `type=2` 注异常（500 / 空数组 / 截断 / 删字段）+ 手点页面看兜底 |
 | 补丁后回归 | `firerpa` 驱动 App 走流程 + 本技能（或 anything-analyzer）读流量比对 |
