@@ -14,6 +14,25 @@
 
 ---
 
+## 2026-11-01 新增 `reqable` 技能（P1 依赖类）+ 第 7 个按需 MCP（Reqable 内置 MCP 服务器）
+
+**变更类型**：新增 skill / 新增 MCP 挂载 / 路由（domain-registry）与能力扫描器更新
+
+**内容**：
+
+- **skill** `skills\reqable\`（6 文件约 36 KB，DSH 原生）：`SKILL.md`（门面：本机事实表、开工三步、主线、验收、坑、边界）+ `references\local-environment.md`（路径/令牌/端口/探活/重建配方）+ `references\mcp-tools.md`（146 工具分组、`capture_live_filter` 七种 filters 形状、重写 action 五个类型与 modify 七种动作的完整字段）+ `references\capture-workflows.md`（桌面/手机/HTTPS/本地流量/二级代理/规则/资产化/逆向组合）+ `scripts\probe-mcp.ps1`（探活：exe/令牌/GUI/API/MCP 握手/一次真实 tools/call，输出 PASS/FAIL 与非零退出码）+ `scripts\reqable-api.ps1`（不走 MCP 的直连 API 封装，等价通道）。
+- **MCP**：第 7 个按需 MCP，`serverName: reqable`，挂在 `reverse-mcp-activator.config.servers`（**不是** preset、**不是** profile 顶层），`--scope all`，`failOnStartupError: false`，令牌经 `!!js "process.env.REQABLE_TOKEN || ''"` 注入。
+- **路由**：`reverse-skill-router/references/domain-registry.json` 的 protocol / web / android 三域 `supportingSkills` 加 `reqable`，protocol 域加 `supportRoles.reqable`（定位「可写抓包臂」，与只读的 anything-analyzer 分工）；`reverse-skill-router/SKILL.md` 的 §2 域表与 §9 边界表各加一行；`scan-capabilities.ps1` 的 `externalPrerequisite` switch 加 reqable（GUI 在跑 + `REQABLE_TOKEN` + probe 脚本路径）。
+
+**原因**：用户要求「我安装了Windows端抓包软件reqable，根据官网文档(https://reqable.com/zh-CN/docs/capture/)和mcp介绍文章创建skill」。取证时发现文章被反爬，改用同文转载 + 官方 MCP 文档，并在本机做了端到端实测（令牌强制、抓包开关、HTTP/HTTPS 捕获、filter/get 读取、146 工具握手、tools/call）。
+
+**影响文件**：`skills\reqable\**`（新增）、`config\cordis.patch.yml`（新增 reqable MCP 行）、`SKILLS.md`（表格 1 行 + 日志 1 条）、`INSTALL.md`（新增 reqable 节）、`CHANGELOG.md`（本条）。
+
+**顺带同步的既有漂移**（不是本次任务产生的，但账本备份本就落后）：`config\cordis.patch.yml` 自 2026-10-27（`d391cb3`）起未再同步，本次一并同步 —— 差异里除了本次新增的 reqable 行，还包括本机早已移除的 `lesec` / `cn:deepseek-v4.1-flash` provider 段与 1M 上下文注释（实测本机 `grep lesec` = 0 命中）。`skills\reverse-skill-router\` 同样落后（`domain-registry.json` 仍是 2026-09-30 的紧凑格式版本），本次一并全量重镜像，逐文件 hash 与本机一致。
+
+**凭据**：令牌只存在用户级环境变量 `REQABLE_TOKEN`，本仓库与 skill 目录**不含任何令牌值**（提交前已用令牌原文扫过全仓库 md/yml/json/ps1，0 命中）。
+
+---
 ## 2026-11-01 新增三个本地自制技能：nixiang-shu / nixiang-zhengliu / nixiang-caiji
 
 **这是什么**：把 `D:\AI_python\reverse\52pojie`（4999 篇）与 `D:\AI_python\reverse\kanxue`（1485 篇）

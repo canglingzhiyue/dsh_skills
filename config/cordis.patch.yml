@@ -56,14 +56,10 @@
         apiKeyEnv: CLAUDEX_API_KEY
         api: openai-completions
         baseURL: https://claudex.org/v1
+        defaultContextWindow: 1000000
         models:
           - id: deepseek-v4.1-flash
             name: deepseek-v4.1-flash
-            # 上下文 1M（2026-10-24 按要求统一调成 1M，下同）。
-            # ★ 这是**本地声明**，不是探测结果：`deepseek-v4.1-flash` 不在 pi-ai 安装目录
-            #   的 catalog 里（catalog 只有 deepseek-flash / deepseek-v4-pro），所以此前走的是
-            #   路由级 defaultContextWindow = 262,144（256K）。中转站真实上限未验证，
-            #   超过真实窗口的请求由服务端报错或静默截断，见本文件末尾说明。
             contextWindow: 1000000
             reasoningEfforts: false
       a-lang:
@@ -71,31 +67,8 @@
         apiKeyEnv: A_LANG_API_KEY
         api: openai-completions
         baseURL: https://langlangya.dpdns.org/v1
+        defaultContextWindow: 1000000
         models:
-          - id: deepseek-v4.1-flash
-            name: deepseek-v4.1-flash
-            contextWindow: 1000000
-            reasoningEfforts:
-              off: none
-              low: low
-              medium: medium
-              high: high
-              max: max
-      lesec:
-        displayName: lesec
-        apiKeyEnv: LESEC_API_KEY
-        api: openai-completions
-        baseURL: https://ai.lesec.top/v1
-        models:
-          - id: cn:deepseek-v4.1-flash
-            name: cn:deepseek-v4.1-flash
-            contextWindow: 1000000
-            reasoningEfforts:
-              off: none
-              low: low
-              medium: medium
-              high: high
-              max: max
           - id: deepseek-v4.1-flash
             name: deepseek-v4.1-flash
             contextWindow: 1000000
@@ -110,6 +83,22 @@
         apiKeyEnv: OK88_API_KEY
         api: openai-completions
         baseURL: https://8888ok.cc/v1
+        defaultContextWindow: 1000000
+        timeoutMs: 180000
+        streamIdleTimeoutMs: 300000
+        retryPolicy:
+          mode: normal
+          maxRetries: 5
+          retryableCodes:
+            - EMPTY_RESPONSE
+            - RATE_LIMIT
+            - SERVER
+            - TIMEOUT
+            - TRANSPORT
+          backoff:
+            initialDelayMs: 1000
+            maxDelayMs: 15000
+            jitterRatio: 0.2
         models:
           - id: deepseek-v4.1-flash
             name: deepseek-v4.1-flash
@@ -120,11 +109,34 @@
               medium: medium
               high: high
               max: max
+      kuaijian:
+        displayName: 快见
+        apiKeyEnv: KUAIJIAN_API_KEY
+        api: openai-completions
+        baseURL: https://kuaijianai.cn:8443/v1
+        defaultContextWindow: 1000000
+        models:
+          - id: deepseek-v4.1-flash
+            name: deepseek-v4.1-flash
+            contextWindow: 1000000
+      mc:
+        displayName: mc
+        apiKeyEnv: MC_API_KEY
+        api: openai-completions
+        baseURL: https://m-c-api.com/v1
+        models:
+          - id: deepseek-v4-pro
+            name: deepseek-v4-pro
+            contextWindow: 1000000
+          - id: deepseek-v4.1-flash
+            name: deepseek-v4.1-flash
+            contextWindow: 1000000
 - id: agent-default-model
   name: "@deepseek-ai/dsh-agent-default-model"
   config:
-    provider: claudex
-    model: deepseek-v4.1-flash
+    provider: deepseek-account
+    model: deepseek-flash
+    reasoningEffort: high
 - id: ui-settings-general
   name: "@deepseek-ai/dsh-client-ui-settings-general"
   config:
@@ -586,4 +598,29 @@
             args:
               - '--mcp'
             toolCallTimeoutMs: 120000
+            failOnStartupError: false
+
+          # mcp-reqable（Reqable 抓包 + 内置 MCP 服务器，2026-11-01 新增）
+          # 官方文档 https://reqable.com/zh-CN/docs/mcp/ ；服务器随 Reqable 安装包内置
+          # （同目录 mcp-server.exe，serverInfo `reqable-mcp` v1.0.1，协议 2024-11-05）。
+          # **stdio**：不是 HTTP，别按 URL 挂。--scope all = 146 工具 / minimal = 48
+          # （minimal 缺断点、重写、脚本、网关、镜像、限速等整族，逆向必须 all）。
+          # 前置：① Reqable GUI 必须在跑（MCP 只是遥控器，GUI 不在则每次 tools/call 失败）；
+          #       ② 访问令牌在**用户级环境变量 REQABLE_TOKEN**，API 强制校验，
+          #          无/错令牌一律 401 `Missing or invalid access token.`。
+          # 令牌经 !!js 从进程环境注入 —— 本文件会被镜像进账本仓库，**绝不硬编码令牌值**。
+          # ⚠ 用户级环境变量只有 **DSH 重启后**才会被继承；本轮若工具报 401，重启 dsh web，
+          #   或改用等价通道 `$DSH_HOME\skills\reqable\scripts\reqable-api.ps1`（直连本地 API）。
+          # failOnStartupError: false —— Reqable 没开时静默少工具、不拦会话创建；
+          # 用前先探活 `pwsh -NoProfile -File $DSH_HOME\skills\reqable\scripts\probe-mcp.ps1`
+          # （期望 INIT_OK + TOOLS_COUNT=146 + CALL_OK）。
+          - serverName: reqable
+            transport: stdio
+            command: 'D:\ProgramsDev\reqable\mcp-server.exe'
+            args:
+              - '--scope'
+              - 'all'
+            env:
+              REQABLE_TOKEN: !!js "process.env.REQABLE_TOKEN || ''"
+            toolCallTimeoutMs: 60000
             failOnStartupError: false

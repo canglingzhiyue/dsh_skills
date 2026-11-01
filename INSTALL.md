@@ -1835,3 +1835,59 @@ foreach ($n in @('nixiang-shu','nixiang-zhengliu','nixiang-caiji')) {
 
 **nixiang-zhengliu 换语料库**：改 `scripts\common.py` 顶部的 `LIB_52PJ` / `LIB_KX` / `CASE_ROOT` 三个常量即可，其余不用动。
 
+
+---
+
+## reqable（P1 依赖类 · 本地自制 skill + 内置 MCP 服务器 · 网络来源的应用）
+
+**它是什么**：Reqable（Fiddler + Charles + Postman 三合一抓包工具）**自 v3.2.0 起在安装包里内置 MCP 服务器**（同目录 `mcp-server.exe`，serverInfo `reqable-mcp`）。这个 skill 是 agent 侧的说明书 + 探活/直连脚本，让逆向模式能通过 `mcp__reqable__*` 直接开抓包、筛流量、读报文、建重写/断点/脚本规则。
+
+**恢复 skill 本体**（自包含，无构建步骤）：
+
+```powershell
+Copy-Item "D:\AI_python\skills_backup\skills\reqable" -Destination "$env:USERPROFILE\.dsh\skills\reqable" -Recurse -Force
+```
+
+**恢复运行时的四步**（缺一步就用不了）：
+
+1. **装 Reqable ≥ 3.2.0**（官网 `https://reqable.com/download/`，Windows 安装包）。3.2.0 以下**没有** MCP 服务器。
+   装完确认 `mcp-server.exe` 与 `Reqable.exe` 在**同一个目录**（升级时一起更新）。
+2. **首次启动装并信任根证书**，否则 HTTPS 抓出来全是乱码。
+   校验：`Get-ChildItem Cert:\CurrentUser\Root | Where-Object { $_.Subject -match 'Reqable' }` 应有输出。
+3. **生成访问令牌并写进用户环境变量**（GUI 里生成；令牌值**只存在环境变量里**）：
+
+   ```powershell
+   [Environment]::SetEnvironmentVariable('REQABLE_TOKEN','<令牌>','User')
+   ```
+
+   本机 API 强制校验：不带或带错令牌一律 `401 Missing or invalid access token.`。
+4. **在 `cordis.patch.yml` 的 activator `servers` 里加一行**（`$DSH_HOME\profiles\web\cordis.patch.yml`，`reverse-mcp-activator.config.servers` 数组末尾）：
+
+   ```yaml
+             - serverName: reqable
+               transport: stdio
+               command: 'D:\ProgramsDev\reqable\mcp-server.exe'
+               args:
+                 - '--scope'
+                 - 'all'
+               env:
+                 REQABLE_TOKEN: !!js "process.env.REQABLE_TOKEN || ''"
+               toolCallTimeoutMs: 60000
+               failOnStartupError: false
+   ```
+
+   ⚠ **`--scope all` 不是可选项**：`minimal`（48 工具）缺断点/重写/脚本/网关/镜像/网络限速/反向代理/二级代理/访问控制整族，做逆向必须 `all`（146 工具）。
+   ⚠ 令牌一律经 `!!js` 从环境读，**不要**把令牌字面量写进这个文件 —— 它会被镜像回本仓库。
+
+**验证（三步，缺一步不算装好）**：
+
+```powershell
+# ① 探活：期望 INIT_OK server=reqable-mcp v1.0.1 / TOOLS_COUNT=146 / CALL_OK
+pwsh -NoProfile -File "$env:USERPROFILE\.dsh\skills\reqable\scripts\probe-mcp.ps1"
+# ② 重启 dsh web 后，新建一个「逆向模式」会话，确认工具列表里出现 mcp__reqable__*
+# ③ 真实抓一轮：开抓 → 走一条 https 流量 → capture_live_filter 返回非空 ID → get_by_id 字段完整
+```
+
+**已知坑**：`mcp-server.exe --help` 会崩（Dart ArgParser 无 help 分支，别拿它查参数）；**GUI 不在时 MCP 握手仍成功但每次 tools/call 失败**（所以探活要探到一次真实调用）；用户级环境变量**重启 DSH 后才被继承**；只经代理访问 `127.0.0.1` 的流量能通但不进记录；抓包期间别和 Clash / anything-analyzer 抢系统代理；手机端没有断点/重写/脚本。
+
+**与 anything-analyzer 的分工**：只读抓包用 analyzer（8888，30 工具）；要改流量（重写/断点/脚本/限速/镜像）或要 cURL·集合资产用 reqable。

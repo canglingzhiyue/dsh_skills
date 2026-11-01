@@ -272,6 +272,7 @@ foreach ($m in $mcp) {
         'camoufox' { $m.externalPrerequisite = 'D:\AI_python\camoufox 独立 venv；首次使用先预热' }
         'analyzer' { $m.externalPrerequisite = 'Anything Analyzer GUI 必须处于运行状态（MCP Server 跑在 Electron 主进程里）；探活 pwsh -File $env:USERPROFILE\.dsh\skills\anything-analyzer\scripts\probe-mcp.ps1' }
         'aidbg' { $m.externalPrerequisite = '本机 release 单文件 exe（D:\AI_python\reverse\aidbg\aidbg.exe，v0.4.0）；缺失/被隔离时静默少工具 —— 手工握手探活见 skills\aidbg\references\local-environment.md §4' }
+        'reqable' { $m.externalPrerequisite = 'Reqable GUI 必须处于运行状态（MCP 服务器只是遥控器）+ 用户环境变量 REQABLE_TOKEN；探活 pwsh -File $env:USERPROFILE\.dsh\skills\reqable\scripts\probe-mcp.ps1（--scope all 期望 146 工具）' }
         default { $m.externalPrerequisite = $null }
     }
     if ($mcpPorts.ContainsKey($m.serverName) -and $mcpPorts[$m.serverName] -gt 0) {

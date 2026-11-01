@@ -1,58 +1,105 @@
 {
   "version": 1,
-  "updated": "2026-09-30",
-  "note": "逆向模式的域注册表：域 → 主技能 / 支撑技能 / 深度 / 验收附加项。scan-capabilities.ps1 读它做悬空引用检查；新增或卸载技能后请同步这里。depth 的语义：deep = 本机有实测过的主技能；shallow = 只有未验证的参考资料；absent = 无任何落点。",
+  "updated": "2026-11-01",
+  "note": "逆向模式的域注册表：域 → 主技能 / 支撑技能 / 深度 / 验收附加项。scan-capabilities.ps1 读它做悬空引用检查；新增或卸载技能后请同步这里。depth 的语义：deep = 本机有实测过的主技能；shallow = 只有未验证的参考资料；absent = 无任何落点。 ★2026-11-01：新增 nixiang-shu（逆向树：两库 6484 篇笔记蒸馏出的 356 条判断链规则，按症状查）。它跨域通用，已加入每个域的 supportingSkills；它不是执行臂，是「卡住时先查判断链」的查询层。 ★2026-11-01：新增 reqable（Reqable 抓包 + 内置 MCP 服务器，146 工具，可写：断点/重写/脚本/镜像/限速），挂进 protocol / web / android 三个域的 supportingSkills——它是「可写抓包臂」，与只读的 anything-analyzer 分工，不同时接管系统代理。",
   "domains": [
     {
       "id": "miniapp",
       "label": "微信小程序",
       "depth": "deep",
-      "primarySkills": ["wmpf-miniapp-reverse"],
-      "supportingSkills": ["reverse-skill-router"],
+      "primarySkills": [
+        "wmpf-miniapp-reverse"
+      ],
+      "supportingSkills": [
+        "reverse-skill-router",
+        "nixiang-shu"
+      ],
       "entryHint": "WMPFDebugger（D:\\AI_python\\reverse\\vmpfdebugger）Frida 注入 WeChatAppEx + CDP 代理 62000，三步顺序敏感：先调试器 → 重开小程序 → 最后 DevTools。不覆盖 .wxapkg 离线解包。",
-      "acceptance": ["CDP 可复现", "四行日志验证点（[miniapp] miniapp client connected 先出现）"]
+      "acceptance": [
+        "CDP 可复现",
+        "四行日志验证点（[miniapp] miniapp client connected 先出现）"
+      ]
     },
     {
       "id": "web",
       "label": "Web / 前端 JS",
       "depth": "deep",
-      "primarySkills": ["camoufox-reverse"],
-      "supportingSkills": ["anything-analyzer", "iv8-js-sandbox", "reverse-skill-router"],
+      "primarySkills": [
+        "camoufox-reverse"
+      ],
+      "supportingSkills": [
+        "anything-analyzer",
+        "iv8-js-sandbox",
+        "reqable",
+        "reverse-skill-router",
+        "nixiang-shu"
+      ],
       "entryHint": "camoufox MCP（39 工具，launch_browser 起）做反指纹浏览、Hook、JSVMP/签名参数定位；先取证复现再谈 AST 清洗。轻量场景（纯算法签名、无需浏览器行为）可用 iv8-js-sandbox：纯 Python 运行 V8 + 模拟浏览器环境，毫秒级、可多线程。",
       "supportRoles": {
         "anything-analyzer": "浏览器侧抓包留档与前端加密速查：内嵌浏览器 CDP 抓包 + JS Hook（fetch/XHR/crypto.subtle/CryptoJS/SM2-4）零配置记录，Agent 经 MCP 直读。只有在「不需要指纹对抗」时才用它——它的指纹伪造只在 JS 层，且默认 UA 暴露工具名（可用 cdp_send_command + Network.setUserAgentOverride 洗掉）。有反爬的站点仍走 camoufox。",
         "iv8-js-sandbox": "轻量补环境臂：纯 Python 运行 V8 + 模拟浏览器环境（DOM/BOM/crypto/Canvas），适合只需算法结果、不需真实浏览器行为的场景。与 camoufox 的分工：先判断目标签名能否脱离浏览器算出来，能 → iv8（毫秒级、可多线程），不能 → camoufox。"
       },
-      "acceptance": ["签名/加密参数可本地复现", "请求可重放成功"]
+      "acceptance": [
+        "签名/加密参数可本地复现",
+        "请求可重放成功"
+      ]
     },
     {
       "id": "android",
       "label": "Android / APK",
       "depth": "deep",
-      "primarySkills": ["apk-reverse"],
-      "supportingSkills": ["anything-analyzer", "firerpa", "reverse-skill-router"],
+      "primarySkills": [
+        "apk-reverse"
+      ],
+      "supportingSkills": [
+        "anything-analyzer",
+        "firerpa",
+        "reqable",
+        "reverse-skill-router",
+        "nixiang-shu"
+      ],
       "entryHint": "权威内核为 skills\\apk-reverse（114 文件）；动态执行臂是 firerpa。本机有 jadx MCP（需 JADX-GUI + 8650 在线）与 IDA 9.4 MCP，先读 capabilities.md 与 apk-reverse\\references\\local-environment.md 再动手。",
       "supportRoles": {
         "anything-analyzer": "App 流量抓包臂：MITM 代理（0.0.0.0:8888）+ 内置 MCP Server，手机 Wi-Fi 挂代理后 App 请求汇入统一会话，Agent 经 MCP 直读（filter_requests / get_request_detail）。**注意 Android 7+ 默认不信任用户 CA**：真机需 Magisk 把 CA 塞进系统存储（/system/etc/security/cacerts/），否则 App 流量握手失败；H5/浏览器流量不受此限。用 firerpa 驱动 App 走流程、anything-analyzer 读流量，是补丁后回归验证的常用组合。",
         "firerpa": "动态执行臂（属于逆向，不是外围自动化）：真机/模拟器上的 UI 驱动、批量点击走流程、补丁后的功能回归验证、以及需要「让 App 自己跑起来」才能观察的行为。脚本必须落纯 ASCII 路径（中文路径会让 import lamda 崩 UnicodeEncodeError）；先 adb -s <serial> forward tcp:65000 tcp:65000 再 --host localhost；adb 一律用 D:\\ProgramsDev\\adb\\adb.exe"
       },
-      "acceptance": ["apk-reverse 的 done 六条", "patch-audit 双层（Tier1 长度扫描 + Tier2 逐 opcode）", "control build 对照", "动态回归：firerpa 在真实设备上跑通目标流程且相邻功能仍可用"]
+      "acceptance": [
+        "apk-reverse 的 done 六条",
+        "patch-audit 双层（Tier1 长度扫描 + Tier2 逐 opcode）",
+        "control build 对照",
+        "动态回归：firerpa 在真实设备上跑通目标流程且相邻功能仍可用"
+      ]
     },
     {
       "id": "protocol",
       "label": "协议逆向 / 非浏览器流量",
       "depth": "deep",
-      "primarySkills": ["anything-analyzer"],
-      "supportingSkills": ["reverse-skill-router"],
-      "entryHint": "主技能 anything-analyzer（Electron GUI + 内置 MCP Server）：内嵌浏览器 CDP 抓包 + MITM 代理（0.0.0.0:8888）+ 统一会话，MCP 在 127.0.0.1:23816，工具名 mcp__analyzer__*。GUI 必须运行——MCP 跑在 Electron 主进程里，不开 GUI 就静默失效，先跑 scripts\\probe-mcp.ps1 探活、scripts\\start-analyzer.ps1 启动。覆盖手机 App / 桌面应用 / curl / Python 脚本 / IoT 的流量，Agent 直接读会话。需要「改包」时改用 mitmdump：本工具 MITM 是只读捕获。",
-      "acceptance": ["抓到的请求可被 Agent 经 MCP 直接读取（filter_requests 返回非空且字段完整）", "请求可重放成功", "含签名/加密参数时，参数来源已定位（get_hooks 或源码）并可本地复现"]
+      "primarySkills": [
+        "anything-analyzer"
+      ],
+      "supportingSkills": [
+        "reqable",
+        "reverse-skill-router",
+        "nixiang-shu"
+      ],
+      "entryHint": "主技能 anything-analyzer（Electron GUI + 内置 MCP Server）：内嵌浏览器 CDP 抓包 + MITM 代理（0.0.0.0:8888）+ 统一会话，MCP 在 127.0.0.1:23816，工具名 mcp__analyzer__*。GUI 必须运行——MCP 跑在 Electron 主进程里，不开 GUI 就静默失效，先跑 scripts\\probe-mcp.ps1 探活、scripts\\start-analyzer.ps1 启动。覆盖手机 App / 桌面应用 / curl / Python 脚本 / IoT 的流量，Agent 直接读会话。需要「改包」（重写/断点/脚本/限速/镜像）或要 cURL·集合资产时，改用支撑技能 reqable（自带 MCP，146 工具，9000 端口）：它的抓包引擎可写、GUI 常驻、令牌 REQABLE_TOKEN 鉴权。",
+      "supportRoles": {
+        "reqable": "可写抓包臂：Reqable 内置 MCP 服务器（stdio，reqable-mcp v1.0.1，--scope all=146 工具）经本地 API（proxyPort 默认 9000）遥控 GUI。能开抓包、按 keyword/url/host/ip/method/code/application 筛流量、读单条报文、转 cURL/集合，并建断点、重写（含注入 500/空数组做异常测试）、Python 脚本、网关、镜像、网络限速。**前提：GUI 必须在跑 + 用户环境变量 REQABLE_TOKEN 已设**，否则 MCP 握手成功但每次 tools/call 失败；`--scope minimal` 缺规则类整族。与 anything-analyzer 的分工：只读抓包用 analyzer，要改流量或要资产化用 reqable；两者不要同时接管系统代理。"
+      },
+      "acceptance": [
+        "抓到的请求可被 Agent 经 MCP 直接读取（filter_requests 返回非空且字段完整）",
+        "请求可重放成功",
+        "含签名/加密参数时，参数来源已定位（get_hooks 或源码）并可本地复现"
+      ]
     },
     {
       "id": "ios",
       "label": "iOS",
       "depth": "shallow",
       "primarySkills": [],
-      "supportingSkills": [],
+      "supportingSkills": [
+        "nixiang-shu"
+      ],
       "entryHint": "本机无 iOS 主技能，也没有 ipa/otool/class-dump 工具链。",
       "fallback": "参考（未在本机验证）：C:\\Users\\y\\.dsh\\reverse-skill\\skills\\mobile-reverse\\references\\ios-reverse-guide.md。使用前必须标注「未验证」，并先建能力清单条目。",
       "acceptance": []
@@ -61,14 +108,23 @@
       "id": "windows",
       "label": "Windows / PE / .NET",
       "depth": "deep",
-      "primarySkills": ["aidbg"],
-      "supportingSkills": ["reverse-skill-router"],
+      "primarySkills": [
+        "aidbg"
+      ],
+      "supportingSkills": [
+        "reverse-skill-router",
+        "nixiang-shu"
+      ],
       "entryHint": "主技能 aidbg —— 本机 AI-first Windows x86/x64 调试器，exe 在 D:\\AI_python\\reverse\\aidbg\\aidbg.exe（v0.4.0，单文件、零 VC 运行时依赖）。JSONL CLI（-c / --script）优先，另有 13 工具 MCP（mcp__aidbg__*，由 reverse-mcp-activator 在**逆向模式会话创建时**挂载，普通会话不可见）。默认固定基址：运行期地址与 IDA/Ghidra 静态地址逐字节一致。覆盖断点（软/硬/内存/条件/命中命令）、单步与 rununtil、寄存器/内存/栈/CFG/PEB-TEB、导入表扫描-引用-重建与导入调用追踪、dump 可运行 PE、带原始字节记录的字节补丁（undo / 烘焙副本）、快照回退、反反调试 hide+detect。**本机仍无 x64dbg / dnSpy / Ghidra / radare2**：静态侧继续用 IDA 9.4 + idalib MCP，aidbg 补的是动态那一侧。",
       "supportRoles": {
         "reverse-skill-router": "能力扫描器负责 aidbg 的探活与版本（工具表 k=binary），并把 MCP 标为 activator 层（会话创建时按需）；普通会话里没有 mcp__aidbg__* 工具，需新开逆向模式会话或直接走 CLI"
       },
       "fallback": ".NET 反编译仍无本机工具：参考（未在本机验证）C:\\Users\\y\\.dsh\\reverse-skill\\skills\\dotnet-reverse（28.6 KB）与 skills\\reverse-engineering\\references\\anti-analysis.md（32.4 KB，含 Windows PEB / 反 DBI 专节）。",
-      "acceptance": ["目标行为在调试器里被直接观察到（断点命中 / 寄存器与内存证据），不是只读代码推断", "补丁类结论用 patch file 烘焙出的副本复跑验证，原文件保持不动", "反反调试结论区分 hide 覆盖了什么、没覆盖什么（直接系统调用 / 时序检查 / ntdll 完整性扫描）"]
+      "acceptance": [
+        "目标行为在调试器里被直接观察到（断点命中 / 寄存器与内存证据），不是只读代码推断",
+        "补丁类结论用 patch file 烘焙出的副本复跑验证，原文件保持不动",
+        "反反调试结论区分 hide 覆盖了什么、没覆盖什么（直接系统调用 / 时序检查 / ntdll 完整性扫描）"
+      ]
     }
   ]
 }
